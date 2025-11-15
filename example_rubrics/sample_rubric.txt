@@ -1,0 +1,27 @@
+Essay Grading Rubric
+
+THESIS: Does the essay contain a clear, identifiable thesis statement that presents the main argument?
+- Look for a declarative statement that expresses the central claim
+- Usually found in the introduction
+- Score: 0-10 points
+
+CITATIONS: Are there proper citations throughout the essay?
+- Identify all in-text citations (e.g., Smith, 2019)
+- Check for variety and relevance
+- Score: 0-10 points
+
+SUPPORTING_EVIDENCE: Does the essay provide supporting evidence for its claims?
+- Look for examples, data, or reasoning that backs up arguments
+- Evidence should be relevant and sufficient
+- Score: 0-10 points
+
+STRUCTURE: Is the essay well-structured with clear introduction, body, and conclusion?
+- Introduction should set up the topic
+- Body paragraphs should develop ideas
+- Conclusion should summarize effectively
+- Score: 0-10 points
+
+REFERENCES: Does the essay include a properly formatted references section?
+- Check for a references/bibliography section
+- Verify formatting consistency
+- Score: 0-10 points

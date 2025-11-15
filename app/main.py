@@ -1,14 +1,17 @@
 from typing import Optional
+import os
+from dotenv import load_dotenv
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, UploadFile, File, Form
 from sqlmodel import Session, select
 from sqlalchemy import func
 
 from .database import engine, init_db
-from .models import Item
+from .models import Item, Essay, Rubric, Grading
+from .essay_grader import EssayGrader
 
 app = FastAPI(title="FastAPI + SQLite (SQLModel) example")
-
+load_dotenv()
 
 @app.on_event("startup")
 def on_startup():
@@ -104,3 +107,141 @@ def delete_item(item_id: int):
         session.delete(item)
         session.commit()
         return {"ok": True}
+
+
+# ============================================================================
+# Essay Grading Endpoints
+# ============================================================================
+
+@app.post("/essays/", response_model=Essay)
+async def upload_essay(file: UploadFile = File(...)):
+    """Upload an essay text file."""
+    content = await file.read()
+    essay_text = content.decode('utf-8')
+
+    with Session(engine) as session:
+        essay = Essay(
+            filename=file.filename,
+            content=essay_text
+        )
+        session.add(essay)
+        session.commit()
+        session.refresh(essay)
+        return essay
+
+
+@app.get("/essays/", response_model=list[Essay])
+def list_essays():
+    """List all uploaded essays."""
+    with Session(engine) as session:
+        essays = session.exec(select(Essay)).all()
+        return essays
+
+
+@app.get("/essays/{essay_id}", response_model=Essay)
+def get_essay(essay_id: int):
+    """Get a specific essay by ID."""
+    with Session(engine) as session:
+        essay = session.get(Essay, essay_id)
+        if not essay:
+            raise HTTPException(status_code=404, detail="Essay not found")
+        return essay
+
+
+@app.post("/rubrics/", response_model=Rubric)
+async def upload_rubric(file: UploadFile = File(...)):
+    """Upload a rubric text file."""
+    content = await file.read()
+    rubric_text = content.decode('utf-8')
+
+    # Parse the rubric
+    grader = EssayGrader()
+    criteria = grader.parse_rubric(rubric_text)
+
+    with Session(engine) as session:
+        rubric = Rubric(
+            name=file.filename,
+            content=rubric_text,
+            criteria=criteria
+        )
+        session.add(rubric)
+        session.commit()
+        session.refresh(rubric)
+        return rubric
+
+
+@app.get("/rubrics/", response_model=list[Rubric])
+def list_rubrics():
+    """List all uploaded rubrics."""
+    with Session(engine) as session:
+        rubrics = session.exec(select(Rubric)).all()
+        return rubrics
+
+
+@app.get("/rubrics/{rubric_id}", response_model=Rubric)
+def get_rubric(rubric_id: int):
+    """Get a specific rubric by ID."""
+    with Session(engine) as session:
+        rubric = session.get(Rubric, rubric_id)
+        if not rubric:
+            raise HTTPException(status_code=404, detail="Rubric not found")
+        return rubric
+
+
+@app.post("/grade", response_model=Grading)
+def grade_essay(essay_id: int = Form(...), rubric_id: int = Form(...)):
+    """
+    Grade an essay based on a rubric.
+
+    Returns grading results with scores, feedback, and text highlights.
+    """
+    with Session(engine) as session:
+        # Get essay and rubric
+        essay = session.get(Essay, essay_id)
+        if not essay:
+            raise HTTPException(status_code=404, detail="Essay not found")
+
+        rubric = session.get(Rubric, rubric_id)
+        if not rubric:
+            raise HTTPException(status_code=404, detail="Rubric not found")
+
+        # Grade the essay
+        try:
+            grader = EssayGrader()
+            grading_results = grader.grade_essay(essay.content, rubric.content)
+            total_score = grader.calculate_total_score(grading_results)
+        except Exception as e:
+            raise HTTPException(
+                status_code=500,
+                detail=f"Error grading essay: {str(e)}"
+            )
+
+        # Save grading to database
+        grading = Grading(
+            essay_id=essay_id,
+            rubric_id=rubric_id,
+            results=grading_results,
+            total_score=total_score
+        )
+        session.add(grading)
+        session.commit()
+        session.refresh(grading)
+        return grading
+
+
+@app.get("/gradings/", response_model=list[Grading])
+def list_gradings():
+    """List all gradings."""
+    with Session(engine) as session:
+        gradings = session.exec(select(Grading)).all()
+        return gradings
+
+
+@app.get("/gradings/{grading_id}", response_model=Grading)
+def get_grading(grading_id: int):
+    """Get a specific grading by ID with all highlight information."""
+    with Session(engine) as session:
+        grading = session.get(Grading, grading_id)
+        if not grading:
+            raise HTTPException(status_code=404, detail="Grading not found")
+        return grading
