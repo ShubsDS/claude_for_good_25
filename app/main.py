@@ -13,6 +13,18 @@ from .essay_grader import EssayGrader
 from .jwtsign import SignUpSchema, SignInSchema, signup, signin, decode
 from fastapi import Query
 
+from fastapi.middleware.cors import CORSMiddleware
+
+app = FastAPI()
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # or ["http://localhost:5173"]
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
 app = FastAPI(title="FastAPI + SQLite (SQLModel) example")
 load_dotenv()
 
@@ -250,10 +262,8 @@ def get_grading(grading_id: int):
         return grading
 
 @app.post("/signup")
-def sign_up(request: SignUpSchema):
-    token = signup(request.name, request.email, request.password)
-    return {"token": token}
-
+def signup_route(user: SignUpSchema):
+    return signup(user)
 
 @app.post("/signin")
 def sign_in(request: SignInSchema):
