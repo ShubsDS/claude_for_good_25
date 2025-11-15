@@ -50,6 +50,85 @@ def test_ingest():
             print("✅ SUCCESS!")
             print(f"\nIngested {len(result.get('ingested', []))} submission(s):\n")
             
+            # Display rubric information if available
+            if result.get('rubric'):
+                print("=" * 60)
+                print("ASSIGNMENT & RUBRIC INFORMATION:")
+                print("=" * 60)
+                
+                # Display assignment information
+                assignment_info = result.get('assignment_info', {})
+                print(f"\nAssignment:")
+                print(f"  Name: {assignment_info.get('name', 'N/A')}")
+                print(f"  ID: {assignment_info.get('id', 'N/A')}")
+                print(f"  Points Possible: {assignment_info.get('points_possible', 'N/A')}")
+                print(f"  Due Date: {assignment_info.get('due_at', 'N/A')}")
+                if assignment_info.get('description'):
+                    import re
+                    description = re.sub('<[^<]+?>', '', assignment_info.get('description', ''))
+                    print(f"\n  Assignment Text:\n{description}")
+                
+                # Display rubric settings
+                rubric_settings = result.get('rubric_settings', {})
+                print(f"\nRubric:")
+                print(f"  Title: {rubric_settings.get('title', 'N/A')}")
+                print(f"  Points Possible: {rubric_settings.get('points_possible', 'N/A')}")
+                print(f"  ID: {rubric_settings.get('id', 'N/A')}")
+                print(f"\nCriteria:")
+                for criterion in result.get('rubric', []):
+                    print(f"\n  • {criterion.get('description', 'N/A')} ({criterion.get('points', 0)} points)")
+                    if criterion.get('long_description'):
+                        print(f"    Description: {criterion.get('long_description')}")
+                    print(f"    Ratings:")
+                    for rating in criterion.get('ratings', []):
+                        print(f"      - {rating.get('description', 'N/A')}: {rating.get('points', 0)} points")
+                print("\n" + "=" * 60 + "\n")
+            
+            # Save rubric to text file if available
+            if result.get('rubric'):
+                rubric_file = f"data/submissions/{ASSIGNMENT_ID}/rubric.txt"
+                os.makedirs(os.path.dirname(rubric_file), exist_ok=True)
+                with open(rubric_file, 'w') as f:
+                    f.write("ASSIGNMENT & RUBRIC\n")
+                    f.write("=" * 60 + "\n\n")
+                    
+                    # Write assignment information
+                    assignment_info = result.get('assignment_info', {})
+                    f.write("ASSIGNMENT:\n")
+                    f.write("-" * 60 + "\n")
+                    f.write(f"Name: {assignment_info.get('name', 'N/A')}\n")
+                    f.write(f"ID: {assignment_info.get('id', 'N/A')}\n")
+                    f.write(f"Points Possible: {assignment_info.get('points_possible', 'N/A')}\n")
+                    f.write(f"Due Date: {assignment_info.get('due_at', 'N/A')}\n")
+                    
+                    # Write assignment text/description
+                    if assignment_info.get('description'):
+                        import re
+                        description = re.sub('<[^<]+?>', '', assignment_info.get('description', ''))
+                        f.write(f"\nAssignment Text:\n{description}\n")
+                    
+                    # Write rubric settings
+                    f.write("\n" + "=" * 60 + "\n\n")
+                    rubric_settings = result.get('rubric_settings', {})
+                    f.write("RUBRIC:\n")
+                    f.write("-" * 60 + "\n")
+                    f.write(f"Title: {rubric_settings.get('title', 'N/A')}\n")
+                    f.write(f"Points Possible: {rubric_settings.get('points_possible', 'N/A')}\n")
+                    f.write(f"ID: {rubric_settings.get('id', 'N/A')}\n\n")
+                    f.write("CRITERIA:\n")
+                    f.write("-" * 60 + "\n\n")
+                    for criterion in result.get('rubric', []):
+                        f.write(f"{criterion.get('description', 'N/A')} ({criterion.get('points', 0)} points)\n")
+                        if criterion.get('long_description'):
+                            f.write(f"Description: {criterion.get('long_description')}\n")
+                        f.write(f"\nRatings:\n")
+                        for rating in criterion.get('ratings', []):
+                            f.write(f"  • {rating.get('description', 'N/A')}: {rating.get('points', 0)} points\n")
+                            if rating.get('long_description'):
+                                f.write(f"    {rating.get('long_description')}\n")
+                        f.write("\n")
+                print(f"✅ Rubric saved to: {rubric_file}\n")
+            
             for idx, sub in enumerate(result.get('ingested', []), 1):
                 print(f"  {idx}. Student ID: {sub.get('student_id')}")
                 print(f"     Student Name: {sub.get('student_name')}")

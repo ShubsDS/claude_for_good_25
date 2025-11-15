@@ -1,0 +1,34 @@
+ASSIGNMENT & RUBRIC
+============================================================
+
+ASSIGNMENT:
+------------------------------------------------------------
+Name: PSTW Essay
+ID: 790778
+Points Possible: 100.0
+Due Date: None
+
+Assignment Text:
+Sample Essay
+
+============================================================
+
+RUBRIC:
+------------------------------------------------------------
+Title: sample rubric
+Points Possible: 4.0
+ID: 48215
+
+CRITERIA:
+------------------------------------------------------------
+
+Overall Essay (4.0 points)
+Description: Overall Essay
+
+Ratings:
+  • Exceeds: 4.0 points
+  • Mastery: 3.0 points
+  • Near: 2.0 points
+  • Below: 1.0 points
+  • No Evidence: 0.0 points
+

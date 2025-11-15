@@ -51,6 +51,24 @@ class CanvasClientService:
             return [assignment.get_submission(student_id)]
         return assignment.get_submissions()
 
+    def get_rubric_info(self, assignment):
+        """Extract rubric and assignment information from an assignment object."""
+        rubric = getattr(assignment, 'rubric', None)
+        rubric_settings = getattr(assignment, 'rubric_settings', None)
+        assignment_info = {
+            'id': getattr(assignment, 'id', None),
+            'name': getattr(assignment, 'name', None),
+            'description': getattr(assignment, 'description', None),
+            'points_possible': getattr(assignment, 'points_possible', None),
+            'due_at': getattr(assignment, 'due_at', None),
+            'course_id': getattr(assignment, 'course_id', None)
+        }
+        return {
+            'rubric': rubric,
+            'rubric_settings': rubric_settings,
+            'assignment_info': assignment_info
+        }
+
     def download_fileobj(self, file_obj, target_path: Path):
         # Canvas File object may provide download(path)
         if hasattr(file_obj, "download"):
@@ -97,6 +115,7 @@ def ingest_submissions(req: CanvasIngestRequest):
     try:
         course = service.get_course(req.course_id)
         assignment = service.get_assignment(course, req.assignment_id)
+        rubric_info = service.get_rubric_info(assignment)
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"Failed to fetch course/assignment: {e}")
 
@@ -191,5 +210,11 @@ def ingest_submissions(req: CanvasIngestRequest):
             session.commit()
             session.refresh(record)
             results.append({"submission_db_id": record.id, "student_id": student_id, "student_name": student_name, "files": saved_files})
-
-    return {"ingested": results}
+    
+    response = {"ingested": results}
+    if rubric_info.get('rubric'):
+        response['rubric'] = rubric_info['rubric']
+        response['rubric_settings'] = rubric_info['rubric_settings']
+        response['assignment_info'] = rubric_info['assignment_info']
+    
+    return response
