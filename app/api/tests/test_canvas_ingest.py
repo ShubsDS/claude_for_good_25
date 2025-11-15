@@ -6,10 +6,12 @@ Usage: python test_canvas_ingest.py
 
 import requests
 import json
-
+from dotenv import load_dotenv
+import os
+load_dotenv()
 # Canvas credentials and assignment info
 CANVAS_BASE_URL = "https://canvas.its.virginia.edu"
-API_TOKEN = "22119~mBEfxyZ7CaLLZAETkm8ZaZzxRyGKUC8fFAF4D6L2thyThBxwHGJYFGPtk9Dtf6fP"
+API_TOKEN = os.getenv("CANVAS_API_TOKEN")
 COURSE_ID = 175906
 ASSIGNMENT_ID = 790778
 
