@@ -3,3 +3,4 @@ uvicorn[standard]>=0.20.0
 sqlmodel>=0.0.8
 canvasapi>=3.0.0
 requests>=2.31.0
+pymupdf>=1.23.0
