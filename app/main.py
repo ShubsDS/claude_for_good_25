@@ -6,8 +6,11 @@ from sqlalchemy import func
 
 from .database import engine, init_db
 from .models import Item
+from .api.canvas import router as canvas_router
 
 app = FastAPI(title="FastAPI + SQLite (SQLModel) example")
+
+app.include_router(canvas_router)
 
 
 @app.on_event("startup")
