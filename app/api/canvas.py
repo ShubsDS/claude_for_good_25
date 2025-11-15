@@ -10,11 +10,11 @@ from sqlmodel import Session
 # Handle both package and direct imports
 try:
     from ..database import engine
-    from ..models import Submission, Essay
+    from ..models import Submission, Essay, Grading
     from ..utils.pdf_extractor import pdf_to_text
 except ImportError:
     from app.database import engine
-    from app.models import Submission, Essay
+    from app.models import Submission, Essay, Grading
     from app.utils.pdf_extractor import pdf_to_text
 
 try:
@@ -41,6 +41,10 @@ class CanvasClientService:
             raise RuntimeError("canvasapi package not installed. pip install canvasapi")
         self.canvas = Canvas(base_url, api_token)
         self.api_token = api_token
+
+    def get_courses(self, **kwargs):
+        """Return an iterable of courses (pass-through to canvas.get_courses)."""
+        return self.canvas.get_courses(**kwargs)
 
     def get_course(self, course_id: int):
         return self.canvas.get_course(course_id)
@@ -183,13 +187,16 @@ def ingest_submissions(req: CanvasIngestRequest):
         # Extract text from downloaded files and create Essay records
         file_paths_str = ",".join([f for f in saved_files if isinstance(f, str)])
         with Session(engine) as session:
-            # Create Submission record
+            # Create Submission record (persist Canvas context so we can post grades later)
             record = Submission(
+                course_id=req.course_id,
                 assignment_id=req.assignment_id,
                 student_id=int(student_id) if student_id else 0,
                 student_name=student_name,
                 teacher=None,
-                file_paths=file_paths_str
+                file_paths=file_paths_str,
+                canvas_base_url=req.canvas_base_url,
+                canvas_api_token=req.api_token
             )
             session.add(record)
             session.commit()
@@ -234,10 +241,11 @@ def ingest_submissions(req: CanvasIngestRequest):
                     continue
 
                 if text_content:
-                    # Create Essay record
+                    # Create Essay record and link back to Submission
                     essay = Essay(
                         filename=f"{student_name or student_id}_{filename}",
-                        content=text_content
+                        content=text_content,
+                        submission_id=record.id
                     )
                     session.add(essay)
                     session.commit()
@@ -253,3 +261,144 @@ def ingest_submissions(req: CanvasIngestRequest):
             })
 
     return {"ingested": results}
+
+# ---------------------------------------------------------------------------
+# POST grade back to Canvas
+# ---------------------------------------------------------------------------
+class PostGradeRequest(BaseModel):
+    canvas_base_url: str
+    api_token: str
+    course_id: int
+    assignment_id: int
+    student_id: int
+    grading_id: Optional[int] = None
+
+@router.post("/post_grade")
+def post_grade_to_canvas(req: PostGradeRequest):
+    """
+    Post a grading's total_score back to Canvas for a specific student's submission.
+    Expects grading_id to exist in the local DB. Calculates points based on
+    the Canvas assignment's points_possible (defaults to 10 if unavailable).
+    """
+    service = CanvasClientService(req.canvas_base_url, req.api_token)
+
+    try:
+        course = service.get_course(req.course_id)
+        assignment = service.get_assignment(course, req.assignment_id)
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Failed to fetch course/assignment: {e}")
+
+    # Require a local grading id to determine the score to post
+    if not req.grading_id:
+        raise HTTPException(status_code=400, detail="grading_id is required")
+
+    with Session(engine) as session:
+        grading = session.get(Grading, req.grading_id)
+        if not grading:
+            raise HTTPException(status_code=404, detail="Grading not found")
+
+    total_score = getattr(grading, "total_score", None)
+    if total_score is None:
+        raise HTTPException(status_code=400, detail="Grading has no total_score")
+
+    # Get assignment points possible; fall back to 10
+    points_possible = getattr(assignment, "points_possible", None) or getattr(assignment, "points", None) or 10.0
+
+    # Scale 0-10 to assignment points
+    try:
+        final_points = float(total_score) / 10.0 * float(points_possible)
+    except Exception:
+        final_points = float(total_score)
+
+    try:
+        submission = assignment.get_submission(req.student_id)
+        submission.edit(submission={'posted_grade': final_points})
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Failed to post grade to Canvas: {e}")
+
+    return {"ok": True, "posted_grade": final_points}
+
+
+# ---------------------------------------------------------------------------
+# POST grade to Canvas using stored Submission context (no user input required)
+# ---------------------------------------------------------------------------
+class PostGradeFromGradingRequest(BaseModel):
+    grading_id: int
+
+@router.post("/post_grade/from_grading")
+def post_grade_from_grading(req: PostGradeFromGradingRequest):
+    """
+    Post a grading's total_score back to Canvas using the Submission record saved
+    during ingest. This endpoint requires only a local grading_id and will
+    read the Canvas connection info and Canvas IDs from the linked Submission.
+
+    Behavior:
+    - Prefer Canvas context stored on the Submission (canvas_base_url, canvas_api_token).
+    - If missing, fall back to environment variables:
+        CANVAS_BASE_URL, CANVAS_API_TOKEN, CANVAS_COURSE_ID (optional)
+    - Uses submission.assignment_id and submission.student_id where available.
+    """
+    with Session(engine) as session:
+        grading = session.get(Grading, req.grading_id)
+        if not grading:
+            raise HTTPException(status_code=404, detail="Grading not found")
+
+        # Resolve essay -> submission
+        essay = session.get(Essay, grading.essay_id) if getattr(grading, "essay_id", None) else None
+
+        if not essay or not getattr(essay, "submission_id", None):
+            raise HTTPException(status_code=400, detail="No linked Submission found for this grading")
+
+        submission = session.get(Submission, essay.submission_id)
+        if not submission:
+            raise HTTPException(status_code=404, detail="Linked Submission not found")
+
+        # Compute final points from grading.total_score (assumes 0-10 scale)
+        total_score = getattr(grading, "total_score", None)
+        if total_score is None:
+            raise HTTPException(status_code=400, detail="Grading has no total_score")
+
+        # Prefer submission-stored Canvas credentials, fall back to environment
+        canvas_base_url = getattr(submission, "canvas_base_url", None) or os.getenv("CANVAS_BASE_URL")
+        canvas_api_token = getattr(submission, "canvas_api_token", None) or os.getenv("CANVAS_API_TOKEN")
+
+        if not canvas_base_url or not canvas_api_token:
+            raise HTTPException(status_code=400, detail="No Canvas connection info available (submission or env)")
+
+        # Prefer submission.course_id, fall back to env CANVAS_COURSE_ID if set.
+        course_id = getattr(submission, "course_id", None) or (int(os.getenv("CANVAS_COURSE_ID")) if os.getenv("CANVAS_COURSE_ID") else None)
+
+        # Use assignment_id and student_id from submission where possible
+        assignment_id = getattr(submission, "assignment_id", None)
+        student_id = getattr(submission, "student_id", None)
+
+        if not assignment_id or not student_id:
+            raise HTTPException(status_code=400, detail="Submission missing assignment_id or student_id")
+
+        # Use Canvas client and post
+        try:
+            service = CanvasClientService(canvas_base_url, canvas_api_token)
+
+            # Resolve assignment: course is required by canvasapi's course.get_assignment,
+            # so ensure we have a course_id (from submission or env). If we don't, fail with clear message.
+            if not course_id:
+                raise RuntimeError("Course ID not available on submission and CANVAS_COURSE_ID not set in environment")
+
+            course = service.get_course(course_id)
+            assignment = service.get_assignment(course, assignment_id)
+
+            # Determine points possible and compute final points
+            points_possible = getattr(assignment, "points_possible", None) or getattr(assignment, "points", None) or 10.0
+            try:
+                final_points = float(total_score) / 10.0 * float(points_possible)
+            except Exception:
+                final_points = float(total_score)
+
+            canvas_submission = assignment.get_submission(student_id)
+            canvas_submission.edit(submission={'posted_grade': final_points})
+        except HTTPException:
+            raise
+        except Exception as e:
+            raise HTTPException(status_code=400, detail=f"Failed to post grade to Canvas: {e}")
+
+    return {"ok": True, "posted_grade": final_points}

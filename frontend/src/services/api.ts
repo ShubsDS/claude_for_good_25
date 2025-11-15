@@ -97,6 +97,25 @@ export const ingestCanvasSubmissions = async (
   return response.data;
 };
 
+// Post grade back to Canvas (manual - accepts explicit Canvas info)
+export const postGradeToCanvas = async (payload: {
+  canvas_base_url: string;
+  api_token: string;
+  course_id: number;
+  assignment_id: number;
+  student_id: number;
+  grading_id?: number | null;
+}): Promise<any> => {
+  const response = await api.post('/canvas/post_grade', payload);
+  return response.data;
+};
+
+// Post grade using stored Submission context (no user input required)
+export const postGradeFromGrading = async (gradingId: number): Promise<any> => {
+  const response = await api.post('/canvas/post_grade/from_grading', { grading_id: gradingId });
+  return response.data;
+};
+
 // Health check
 export const checkHealth = async (): Promise<{ status: string }> => {
   const response = await api.get('/health');
