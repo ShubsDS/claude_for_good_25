@@ -11,7 +11,7 @@ This script shows how to:
 import requests
 import json
 import os
-
+from dotenv import load_dotenv
 
 BASE_URL = "http://localhost:8000"
 
@@ -148,6 +148,7 @@ Example JavaScript pseudocode:
 
 if __name__ == "__main__":
     # Check if server is running
+    load_dotenv()
     try:
         response = requests.get(f"{BASE_URL}/ping")
         if response.status_code != 200:

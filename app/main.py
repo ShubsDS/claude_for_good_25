@@ -1,5 +1,6 @@
 from typing import Optional
 import os
+from dotenv import load_dotenv
 
 from fastapi import FastAPI, HTTPException, UploadFile, File, Form
 from sqlmodel import Session, select
@@ -10,7 +11,7 @@ from .models import Item, Essay, Rubric, Grading
 from .essay_grader import EssayGrader
 
 app = FastAPI(title="FastAPI + SQLite (SQLModel) example")
-
+load_dotenv()
 
 @app.on_event("startup")
 def on_startup():
