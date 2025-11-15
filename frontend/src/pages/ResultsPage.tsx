@@ -115,17 +115,10 @@ export default function ResultsPage() {
   const [loadingErrors, setLoadingErrors] = useState<Record<number, string>>({});
 
   useEffect(() => {
-    // Only redirect if we have no gradings - but wait a moment for state to populate
+    // Only redirect if we have no gradings and we're not in the middle of loading
     if (!gradings || gradings.length === 0) {
-      console.warn('ResultsPage: No gradings found in state');
-      // Don't redirect immediately - give state time to populate
-      const timeout = setTimeout(() => {
-        if (!gradings || gradings.length === 0) {
-          console.error('ResultsPage: Still no gradings after delay, redirecting');
-          navigate('/teacher/upload');
-        }
-      }, 500);
-      return () => clearTimeout(timeout);
+      navigate('/teacher/upload');
+      return;
     }
 
     // Initialize edited results from gradings
@@ -135,53 +128,42 @@ export default function ResultsPage() {
     }
     setEditedResults(resultsMap);
 
-    // Load the first essay immediately
-    setIsLoading(true);
-    const firstGrading = gradings[0];
-    getEssay(firstGrading.essay_id)
-      .then((essay) => {
-        setEssays(prev => ({ ...prev, [firstGrading.id]: essay }));
-        setLoadingErrors(prev => {
-          const { [firstGrading.id]: _, ...rest } = prev;
-          return rest;
-        });
-      })
-      .catch((error) => {
-        console.error(`Failed to load essay ${firstGrading.essay_id}:`, error);
-        setLoadingErrors(prev => ({
-          ...prev,
-          [firstGrading.id]: error instanceof Error ? error.message : 'Failed to load essay'
-        }));
-      })
-      .finally(() => {
-        setIsLoading(false);
-      });
-  }, []); // Run only once on mount - gradings should be in location.state already
+    // Load the first essay
+    loadCurrentEssay();
+  }, []); // Run only once on mount
 
   // Load essay for current student on-demand
   useEffect(() => {
     if (currentGrading && !essays[currentGrading.id] && !loadingErrors[currentGrading.id]) {
-      setIsLoading(true);
-      getEssay(currentGrading.essay_id)
-        .then((essay) => {
-          setEssays(prev => ({ ...prev, [currentGrading.id]: essay }));
-          setLoadingErrors(prev => {
-            const { [currentGrading.id]: _, ...rest } = prev;
-            return rest;
-          });
-        })
-        .catch((error) => {
-          console.error(`Failed to load essay ${currentGrading.essay_id}:`, error);
-          setLoadingErrors(prev => ({
-            ...prev,
-            [currentGrading.id]: error instanceof Error ? error.message : 'Failed to load essay'
-          }));
-        })
-        .finally(() => {
-          setIsLoading(false);
-        });
+      loadCurrentEssay();
     }
   }, [currentIndex]); // Run when navigation changes
+
+  const loadCurrentEssay = async () => {
+    if (!currentGrading) return;
+
+    // Skip if already loaded
+    if (essays[currentGrading.id]) return;
+
+    setIsLoading(true);
+    try {
+      const essay = await getEssay(currentGrading.essay_id);
+      setEssays(prev => ({ ...prev, [currentGrading.id]: essay }));
+      // Clear any previous error for this student
+      setLoadingErrors(prev => {
+        const { [currentGrading.id]: _, ...rest } = prev;
+        return rest;
+      });
+    } catch (error) {
+      console.error(`Failed to load essay ${currentGrading.essay_id}:`, error);
+      setLoadingErrors(prev => ({
+        ...prev,
+        [currentGrading.id]: error instanceof Error ? error.message : 'Failed to load essay'
+      }));
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   const currentGrading: Grading | undefined = gradings?.[currentIndex];
   const currentEssay = currentGrading ? essays[currentGrading.id] : undefined;
@@ -246,19 +228,6 @@ export default function ResultsPage() {
   // Check for loading error
   const currentError = currentGrading ? loadingErrors[currentGrading.id] : null;
 
-  // Log what data is missing for debugging
-  if (!currentGrading || !currentEssay || !currentResults) {
-    console.warn('Missing data in ResultsPage:', {
-      currentGrading: !!currentGrading,
-      currentEssay: !!currentEssay,
-      currentResults: !!currentResults,
-      currentIndex,
-      totalGradings: gradings?.length,
-      essaysLoaded: Object.keys(essays).length,
-      currentGradingId: currentGrading?.id,
-    });
-  }
-
   // Show loading screen only when actively loading
   if (isLoading && !currentEssay) {
     return (
@@ -283,40 +252,20 @@ export default function ResultsPage() {
           </div>
           <p className="text-gray-900 font-semibold mb-2">Failed to load essay</p>
           <p className="text-gray-600 text-sm mb-4">{currentError}</p>
-          <Button onClick={() => window.location.reload()} variant="outline">
-            Reload Page
+          <Button onClick={loadCurrentEssay} variant="outline">
+            Retry
           </Button>
         </div>
       </div>
     );
   }
 
-  // Show error if missing required data - but try to reload first
+  // Show error if missing required data
   if (!currentGrading || !currentEssay || !currentResults) {
-    // If we have a current grading but essay is missing, try loading it
-    if (currentGrading && !currentEssay && !isLoading) {
-      return (
-        <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-          <div className="text-center max-w-md">
-            <Loader2 className="h-12 w-12 animate-spin text-blue-600 mx-auto mb-4" />
-            <p className="text-gray-600">Loading essay...</p>
-            <Button onClick={() => window.location.reload()} variant="outline" className="mt-4">
-              Reload Page
-            </Button>
-          </div>
-        </div>
-      );
-    }
-
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="text-center max-w-md">
-          <p className="text-gray-600 mb-4">No grading data available</p>
-          <p className="text-sm text-gray-500 mb-4">
-            {!currentGrading && 'No grading found'}
-            {currentGrading && !currentEssay && 'Essay failed to load'}
-            {currentGrading && currentEssay && !currentResults && 'Results unavailable'}
-          </p>
+        <div className="text-center">
+          <p className="text-gray-600">No grading data available</p>
           <Button onClick={() => navigate('/teacher/upload')} className="mt-4">
             Back to Upload
           </Button>
