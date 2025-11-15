@@ -29,6 +29,7 @@ A React-based frontend for the AI Essay Grading System. This application provide
 
 - Node.js 18+ and npm
 - Backend API running on `http://localhost:8000`
+- Canvas LMS API credentials (for automatic submission ingestion)
 
 ## Installation
 
@@ -37,7 +38,16 @@ A React-based frontend for the AI Essay Grading System. This application provide
 npm install
 ```
 
-2. Start the development server:
+2. Configure Canvas credentials:
+   - Copy `.env.example` to `.env`
+   - Update the Canvas credentials:
+     ```
+     VITE_CANVAS_BASE_URL=https://your-canvas-instance.edu
+     VITE_CANVAS_API_TOKEN=your_api_token_here
+     VITE_CANVAS_COURSE_ID=your_course_id
+     ```
+
+3. Start the development server:
 ```bash
 npm run dev
 ```
@@ -80,15 +90,29 @@ frontend/
 
 1. **Start**: Teacher selects "Continue as Teacher" on the landing page
 2. **Upload**:
-   - Enter Canvas assignment ID
+   - Enter Canvas assignment ID (numeric, e.g., 790778)
    - Upload rubric file OR create rubric using text editor
    - Click "Start Grading"
-3. **Processing**: Loading screen shows grading progress
-4. **Results**:
+3. **Canvas Integration** (automatic):
+   - System fetches all submissions from Canvas for the given assignment
+   - PDFs are automatically converted to text
+   - Essays are uploaded to the database
+4. **Processing**: Loading screen shows grading progress for each student
+5. **Results**:
    - View essay with color-coded highlights
    - Edit scores and feedback for each criterion
    - Navigate between students using Previous/Next buttons
    - Save changes
+
+### Canvas Integration
+
+The application automatically:
+- Fetches submissions from Canvas using the assignment ID
+- Downloads PDF submissions
+- Extracts text from PDFs (TXT files are used directly)
+- Uploads all essays to the database for grading
+
+**Note**: Ensure Canvas credentials are properly configured in `.env` file before attempting to grade assignments.
 
 ## API Integration
 

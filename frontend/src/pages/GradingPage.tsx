@@ -66,6 +66,12 @@ export default function GradingPage() {
         return;
       }
 
+      // Show warning if some essays failed
+      if (gradingResults.length < essays.length) {
+        const failedCount = essays.length - gradingResults.length;
+        console.warn(`${failedCount} essay(s) failed to grade. Successfully graded ${gradingResults.length} essay(s).`);
+      }
+
       // Navigate to results after a short delay
       setTimeout(() => {
         navigate('/teacher/results', {
@@ -141,8 +147,15 @@ export default function GradingPage() {
             </div>
 
             {isComplete && (
-              <div className="text-sm text-gray-600">
-                Graded {gradings.length} submission{gradings.length !== 1 ? 's' : ''}
+              <div className="space-y-1">
+                <div className="text-sm text-gray-600">
+                  Successfully graded {gradings.length} of {total} submission{total !== 1 ? 's' : ''}
+                </div>
+                {gradings.length < total && (
+                  <div className="text-xs text-amber-600">
+                    {total - gradings.length} submission{(total - gradings.length) !== 1 ? 's' : ''} failed to grade
+                  </div>
+                )}
               </div>
             )}
           </div>

@@ -33,6 +33,11 @@ export const getEssay = async (id: number): Promise<Essay> => {
   return response.data;
 };
 
+export const deleteAllEssays = async (): Promise<{ ok: boolean; deleted: number }> => {
+  const response = await api.delete<{ ok: boolean; deleted: number }>('/essays/');
+  return response.data;
+};
+
 // Rubric endpoints
 export const uploadRubric = async (file: File): Promise<Rubric> => {
   const formData = new FormData();

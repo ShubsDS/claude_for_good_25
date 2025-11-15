@@ -5,16 +5,18 @@ import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
 import { Textarea } from '../components/ui/textarea';
 import { Upload, FileText, Loader2 } from 'lucide-react';
-import { createRubricFromText, uploadRubric } from '../services/api';
+import { createRubricFromText, uploadRubric, ingestCanvasSubmissions, deleteAllEssays } from '../services/api';
 
 export default function UploadPage() {
   const navigate = useNavigate();
+  const [courseId, setCourseId] = useState('');
   const [assignmentId, setAssignmentId] = useState('');
   const [rubricFile, setRubricFile] = useState<File | null>(null);
   const [rubricText, setRubricText] = useState('');
   const [rubricName, setRubricName] = useState('');
   const [useTextEditor, setUseTextEditor] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  const [loadingMessage, setLoadingMessage] = useState('');
   const [error, setError] = useState('');
 
   const handleRubricFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -29,11 +31,33 @@ export default function UploadPage() {
     e.preventDefault();
     setError('');
 
+    // Validate course ID
+    if (!courseId) {
+      setError('Please enter a course ID');
+      return;
+    }
+
+    // Validate course ID is numeric
+    const numericCourseId = parseInt(courseId);
+    if (isNaN(numericCourseId)) {
+      setError('Course ID must be a number');
+      return;
+    }
+
+    // Validate assignment ID
     if (!assignmentId) {
       setError('Please enter an assignment ID');
       return;
     }
 
+    // Validate assignment ID is numeric
+    const numericAssignmentId = parseInt(assignmentId);
+    if (isNaN(numericAssignmentId)) {
+      setError('Assignment ID must be a number');
+      return;
+    }
+
+    // Validate rubric
     if (!useTextEditor && !rubricFile) {
       setError('Please upload a rubric file');
       return;
@@ -47,7 +71,27 @@ export default function UploadPage() {
     setIsLoading(true);
 
     try {
-      // Upload the rubric
+      // Step 1: Fetch Canvas submissions and ingest them
+      setLoadingMessage('Fetching submissions from Canvas...');
+      console.log('Ingesting Canvas submissions - Course:', numericCourseId, 'Assignment:', numericAssignmentId);
+
+      const canvasResponse = await ingestCanvasSubmissions({
+        canvas_base_url: import.meta.env.VITE_CANVAS_BASE_URL || '',
+        api_token: import.meta.env.VITE_CANVAS_API_TOKEN || '',
+        course_id: numericCourseId,
+        assignment_id: numericAssignmentId,
+      });
+
+      console.log('Canvas ingestion response:', canvasResponse);
+
+      if (!canvasResponse.ingested || canvasResponse.ingested.length === 0) {
+        throw new Error('No submissions found for this assignment');
+      }
+
+      setLoadingMessage(`Found ${canvasResponse.ingested.length} submission(s). Processing...`);
+
+      // Step 2: Upload the rubric
+      setLoadingMessage('Uploading rubric...');
       let rubric;
       if (useTextEditor) {
         rubric = await createRubricFromText(rubricName, rubricText);
@@ -61,21 +105,23 @@ export default function UploadPage() {
         throw new Error('Rubric upload succeeded but no ID was returned');
       }
 
-      // Navigate to grading page with assignment ID and rubric ID
+      // Step 3: Navigate to grading page
+      setLoadingMessage('Starting grading process...');
       navigate('/teacher/grading', {
         state: {
-          assignmentId: parseInt(assignmentId),
+          assignmentId: numericAssignmentId,
           rubricId: rubric.id,
         },
       });
     } catch (err) {
-      console.error('Error uploading rubric:', err);
+      console.error('Error during upload process:', err);
       if (err instanceof Error) {
-        setError(`Failed to upload rubric: ${err.message}`);
+        setError(`Failed: ${err.message}`);
       } else {
-        setError('Failed to upload rubric. Please try again.');
+        setError('Failed to process submissions. Please try again.');
       }
       setIsLoading(false);
+      setLoadingMessage('');
     }
   };
 
@@ -91,27 +137,42 @@ export default function UploadPage() {
 
         <form onSubmit={handleSubmit}>
           <div className="space-y-6">
-            {/* Assignment ID Section */}
+            {/* Canvas Assignment Information Section */}
             <Card>
               <CardHeader>
-                <CardTitle>Assignment Information</CardTitle>
+                <CardTitle>Canvas Assignment Information</CardTitle>
                 <CardDescription>
-                  Enter the Canvas assignment ID to grade
+                  Enter the Canvas course ID and assignment ID to grade
                 </CardDescription>
               </CardHeader>
               <CardContent>
-                <div className="space-y-2">
-                  <label htmlFor="assignmentId" className="text-sm font-medium text-gray-700">
-                    Assignment ID
-                  </label>
-                  <Input
-                    id="assignmentId"
-                    type="text"
-                    placeholder="e.g., 12345"
-                    value={assignmentId}
-                    onChange={(e) => setAssignmentId(e.target.value)}
-                    disabled={isLoading}
-                  />
+                <div className="space-y-4">
+                  <div className="space-y-2">
+                    <label htmlFor="courseId" className="text-sm font-medium text-gray-700">
+                      Course ID
+                    </label>
+                    <Input
+                      id="courseId"
+                      type="text"
+                      placeholder="e.g., 175906"
+                      value={courseId}
+                      onChange={(e) => setCourseId(e.target.value)}
+                      disabled={isLoading}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <label htmlFor="assignmentId" className="text-sm font-medium text-gray-700">
+                      Assignment ID
+                    </label>
+                    <Input
+                      id="assignmentId"
+                      type="text"
+                      placeholder="e.g., 790778"
+                      value={assignmentId}
+                      onChange={(e) => setAssignmentId(e.target.value)}
+                      disabled={isLoading}
+                    />
+                  </div>
                 </div>
               </CardContent>
             </Card>
@@ -205,6 +266,16 @@ export default function UploadPage() {
             {error && (
               <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded">
                 {error}
+              </div>
+            )}
+
+            {/* Loading Message */}
+            {isLoading && loadingMessage && (
+              <div className="bg-blue-50 border border-blue-200 text-blue-700 px-4 py-3 rounded">
+                <div className="flex items-center">
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  {loadingMessage}
+                </div>
               </div>
             )}
 

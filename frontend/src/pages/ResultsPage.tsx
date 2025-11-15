@@ -95,8 +95,10 @@ export default function ResultsPage() {
   const [editedResults, setEditedResults] = useState<Record<number, CriterionResult[]>>({});
   const [activeCriterion, setActiveCriterion] = useState<string | null>(null);
   const [hasChanges, setHasChanges] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
+    // Only redirect if we have no gradings and we're not in the middle of loading
     if (!gradings || gradings.length === 0) {
       navigate('/teacher/upload');
       return;
@@ -104,9 +106,10 @@ export default function ResultsPage() {
 
     // Load all essays
     loadEssays();
-  }, [gradings]);
+  }, []); // Run only once on mount
 
   const loadEssays = async () => {
+    setIsLoading(true);
     const essayMap: Record<number, Essay> = {};
     const resultsMap: Record<number, CriterionResult[]> = {};
 
@@ -122,6 +125,7 @@ export default function ResultsPage() {
 
     setEssays(essayMap);
     setEditedResults(resultsMap);
+    setIsLoading(false);
   };
 
   const currentGrading: Grading | undefined = gradings?.[currentIndex];
@@ -184,7 +188,7 @@ export default function ResultsPage() {
     alert('Changes saved successfully!');
   };
 
-  if (!currentGrading || !currentEssay || !currentResults) {
+  if (isLoading || !currentGrading || !currentEssay || !currentResults) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <div className="text-center">
