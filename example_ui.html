@@ -1,0 +1,445 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Essay Grading - Highlight Example</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            line-height: 1.6;
+            background: #f5f5f5;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            padding: 30px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+
+        h1 {
+            color: #333;
+            margin-bottom: 10px;
+        }
+
+        .subtitle {
+            color: #666;
+            margin-bottom: 30px;
+            font-size: 0.9em;
+        }
+
+        .layout {
+            display: grid;
+            grid-template-columns: 2fr 1fr;
+            gap: 30px;
+        }
+
+        .essay-panel {
+            background: #fafafa;
+            padding: 20px;
+            border-radius: 5px;
+            border: 1px solid #e0e0e0;
+        }
+
+        .essay-panel h2 {
+            color: #444;
+            margin-bottom: 15px;
+            font-size: 1.2em;
+        }
+
+        .essay-content {
+            line-height: 1.8;
+            font-size: 14px;
+            color: #333;
+            white-space: pre-wrap;
+        }
+
+        .score-panel {
+            background: #f9f9f9;
+            padding: 20px;
+            border-radius: 5px;
+            border: 1px solid #e0e0e0;
+        }
+
+        .score-panel h2 {
+            color: #444;
+            margin-bottom: 15px;
+            font-size: 1.2em;
+        }
+
+        .total-score {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 20px;
+            border-radius: 5px;
+            text-align: center;
+            margin-bottom: 20px;
+        }
+
+        .total-score .score {
+            font-size: 2.5em;
+            font-weight: bold;
+        }
+
+        .total-score .label {
+            font-size: 0.9em;
+            opacity: 0.9;
+        }
+
+        .criterion {
+            background: white;
+            padding: 15px;
+            border-radius: 5px;
+            margin-bottom: 12px;
+            border-left: 4px solid #ddd;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .criterion:hover {
+            transform: translateX(5px);
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }
+
+        .criterion.active {
+            transform: translateX(5px);
+            box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+        }
+
+        .criterion-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 8px;
+        }
+
+        .criterion-name {
+            font-weight: bold;
+            font-size: 0.9em;
+            text-transform: uppercase;
+        }
+
+        .criterion-score {
+            font-size: 1.2em;
+            font-weight: bold;
+        }
+
+        .criterion-feedback {
+            font-size: 0.85em;
+            color: #666;
+            margin-top: 5px;
+        }
+
+        .criterion-count {
+            font-size: 0.75em;
+            color: #999;
+            margin-top: 5px;
+        }
+
+        /* Highlight colors by criterion */
+        mark {
+            padding: 2px 0;
+            border-radius: 2px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        mark.active {
+            box-shadow: 0 0 0 3px rgba(0,0,0,0.2);
+            font-weight: 600;
+        }
+
+        mark[data-criterion="THESIS"] {
+            background-color: #FFE0B2;
+        }
+
+        mark[data-criterion="CITATIONS"] {
+            background-color: #C8E6C9;
+        }
+
+        mark[data-criterion="SUPPORTING_EVIDENCE"] {
+            background-color: #BBDEFB;
+        }
+
+        mark[data-criterion="STRUCTURE"] {
+            background-color: #F8BBD0;
+        }
+
+        mark[data-criterion="REFERENCES"] {
+            background-color: #D1C4E9;
+        }
+
+        .criterion[data-criterion="THESIS"] {
+            border-left-color: #FF9800;
+        }
+
+        .criterion[data-criterion="CITATIONS"] {
+            border-left-color: #4CAF50;
+        }
+
+        .criterion[data-criterion="SUPPORTING_EVIDENCE"] {
+            border-left-color: #2196F3;
+        }
+
+        .criterion[data-criterion="STRUCTURE"] {
+            border-left-color: #E91E63;
+        }
+
+        .criterion[data-criterion="REFERENCES"] {
+            border-left-color: #9C27B0;
+        }
+
+        .instructions {
+            background: #E3F2FD;
+            padding: 15px;
+            border-radius: 5px;
+            margin-bottom: 20px;
+            border-left: 4px solid #2196F3;
+        }
+
+        .instructions h3 {
+            color: #1976D2;
+            margin-bottom: 8px;
+            font-size: 1em;
+        }
+
+        .instructions p {
+            font-size: 0.85em;
+            color: #555;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Essay Grading with Highlighted Text</h1>
+        <p class="subtitle">This demonstrates how the grading system highlights relevant sections in the essay</p>
+
+        <div class="instructions">
+            <h3>How to Use:</h3>
+            <p>Hover over or click on a criterion on the right to highlight the corresponding sections in the essay. Each color represents a different grading criterion.</p>
+        </div>
+
+        <div class="layout">
+            <div class="essay-panel">
+                <h2>Essay with Highlights</h2>
+                <div class="essay-content" id="essayContent">
+                    <!-- Content will be loaded here -->
+                </div>
+            </div>
+
+            <div class="score-panel">
+                <h2>Grading Results</h2>
+                <div class="total-score">
+                    <div class="score">8.4/10</div>
+                    <div class="label">Total Score</div>
+                </div>
+
+                <div class="criterion" data-criterion="THESIS">
+                    <div class="criterion-header">
+                        <span class="criterion-name">Thesis</span>
+                        <span class="criterion-score">8/10</span>
+                    </div>
+                    <div class="criterion-feedback">Clear thesis statement present in introduction</div>
+                    <div class="criterion-count">1 section highlighted</div>
+                </div>
+
+                <div class="criterion" data-criterion="CITATIONS">
+                    <div class="criterion-header">
+                        <span class="criterion-name">Citations</span>
+                        <span class="criterion-score">9/10</span>
+                    </div>
+                    <div class="criterion-feedback">Multiple well-formatted citations throughout</div>
+                    <div class="criterion-count">3 sections highlighted</div>
+                </div>
+
+                <div class="criterion" data-criterion="SUPPORTING_EVIDENCE">
+                    <div class="criterion-header">
+                        <span class="criterion-name">Supporting Evidence</span>
+                        <span class="criterion-score">8/10</span>
+                    </div>
+                    <div class="criterion-feedback">Good use of examples to support arguments</div>
+                    <div class="criterion-count">2 sections highlighted</div>
+                </div>
+
+                <div class="criterion" data-criterion="STRUCTURE">
+                    <div class="criterion-header">
+                        <span class="criterion-name">Structure</span>
+                        <span class="criterion-score">9/10</span>
+                    </div>
+                    <div class="criterion-feedback">Well-organized with clear sections</div>
+                    <div class="criterion-count">3 sections highlighted</div>
+                </div>
+
+                <div class="criterion" data-criterion="REFERENCES">
+                    <div class="criterion-header">
+                        <span class="criterion-name">References</span>
+                        <span class="criterion-score">8/10</span>
+                    </div>
+                    <div class="criterion-feedback">Properly formatted reference list included</div>
+                    <div class="criterion-count">1 section highlighted</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Sample essay with highlights (simulated data from API)
+        const essayText = `A Simple Essay with Citations
+
+This essay demonstrates the importance of structured writing and proper citation formatting when developing academic arguments. Well-organized essays improve readability and comprehension for readers.
+
+First, clarity of structure is essential. When an essay follows a logical progression from introduction to conclusion, readers can easily follow the argument being presented (Smith, 2019). This organizational clarity serves both the writer and the audience.
+
+Second, citations allow automated systems and human readers to identify and verify bibliographic elements. Proper citation practices demonstrate academic integrity and allow readers to explore source materials (Lee & Patel, 2020). This strengthens the credibility of the work.
+
+In conclusion, simple essays with clear structure and proper citations remain valuable tools for testing text processing software. They provide predictable patterns while maintaining the essential elements of academic writing (Garcia, 2018).
+
+References
+
+Doe, J. (2021). Testing Text Analysis Systems. Journal of Software Engineering, 15(3), 45–52.
+
+Smith, A. (2019). Essay Structure and Readability. Academic Writing Quarterly, 12(2), 101–115.
+
+Lee, M., & Patel, R. (2020). Automated Citation Detection in Digital Documents. Computational Linguistics Review, 8(1), 23–38.
+
+Garcia, L. (2018). Simple Examples in Software Testing. Testing Methods Journal, 5(4), 88–95.`;
+
+        // Simulated highlight data from API
+        const highlights = [
+            // THESIS
+            { criterion: 'THESIS', start: 34, end: 162, text: 'demonstrates the importance of structured writing and proper citation formatting when developing academic arguments' },
+
+            // CITATIONS
+            { criterion: 'CITATIONS', start: 438, end: 451, text: '(Smith, 2019)' },
+            { criterion: 'CITATIONS', start: 682, end: 701, text: '(Lee & Patel, 2020)' },
+            { criterion: 'CITATIONS', start: 945, end: 959, text: '(Garcia, 2018)' },
+
+            // SUPPORTING_EVIDENCE
+            { criterion: 'SUPPORTING_EVIDENCE', start: 239, end: 291, text: 'clarity of structure is essential' },
+            { criterion: 'SUPPORTING_EVIDENCE', start: 504, end: 619, text: 'citations allow automated systems and human readers to identify and verify bibliographic elements' },
+
+            // STRUCTURE
+            { criterion: 'STRUCTURE', start: 0, end: 32, text: 'A Simple Essay with Citations' },
+            { criterion: 'STRUCTURE', start: 195, end: 237, text: 'First, clarity of structure is essential.' },
+            { criterion: 'STRUCTURE', start: 770, end: 784, text: 'In conclusion,' },
+
+            // REFERENCES
+            { criterion: 'REFERENCES', start: 962, end: 1279, text: 'References\n\nDoe, J. (2021). Testing Text Analysis Systems. Journal of Software Engineering, 15(3), 45–52.\n\nSmith, A. (2019). Essay Structure and Readability. Academic Writing Quarterly, 12(2), 101–115.\n\nLee, M., & Patel, R. (2020). Automated Citation Detection in Digital Documents. Computational Linguistics Review, 8(1), 23–38.\n\nGarcia, L. (2018). Simple Examples in Software Testing. Testing Methods Journal, 5(4), 88–95.' }
+        ];
+
+        // Render essay with highlights
+        function renderEssay() {
+            // Sort highlights by position
+            const sortedHighlights = [...highlights].sort((a, b) => a.start - b.start);
+
+            let html = '';
+            let lastIndex = 0;
+
+            sortedHighlights.forEach(highlight => {
+                // Add text before highlight
+                html += escapeHtml(essayText.slice(lastIndex, highlight.start));
+
+                // Add highlighted text
+                const highlightedText = essayText.slice(highlight.start, highlight.end);
+                html += `<mark data-criterion="${highlight.criterion}">${escapeHtml(highlightedText)}</mark>`;
+
+                lastIndex = highlight.end;
+            });
+
+            // Add remaining text
+            html += escapeHtml(essayText.slice(lastIndex));
+
+            document.getElementById('essayContent').innerHTML = html;
+        }
+
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+
+        // Add interactivity
+        function setupInteractivity() {
+            // Criterion hover/click
+            document.querySelectorAll('.criterion').forEach(criterionEl => {
+                criterionEl.addEventListener('mouseenter', function() {
+                    const criterion = this.dataset.criterion;
+                    highlightCriterion(criterion);
+                });
+
+                criterionEl.addEventListener('mouseleave', function() {
+                    clearHighlights();
+                });
+
+                criterionEl.addEventListener('click', function() {
+                    const criterion = this.dataset.criterion;
+                    toggleCriterion(criterion);
+                });
+            });
+
+            // Mark hover
+            document.querySelectorAll('mark').forEach(mark => {
+                mark.addEventListener('mouseenter', function() {
+                    const criterion = this.dataset.criterion;
+                    const criterionEl = document.querySelector(`.criterion[data-criterion="${criterion}"]`);
+                    if (criterionEl) {
+                        criterionEl.classList.add('active');
+                    }
+                    this.classList.add('active');
+                });
+
+                mark.addEventListener('mouseleave', function() {
+                    document.querySelectorAll('.criterion').forEach(c => c.classList.remove('active'));
+                    this.classList.remove('active');
+                });
+            });
+        }
+
+        function highlightCriterion(criterion) {
+            // Highlight all marks with this criterion
+            document.querySelectorAll(`mark[data-criterion="${criterion}"]`).forEach(mark => {
+                mark.classList.add('active');
+            });
+
+            // Highlight the criterion card
+            document.querySelector(`.criterion[data-criterion="${criterion}"]`).classList.add('active');
+        }
+
+        function clearHighlights() {
+            document.querySelectorAll('mark.active').forEach(mark => {
+                mark.classList.remove('active');
+            });
+            document.querySelectorAll('.criterion.active').forEach(crit => {
+                crit.classList.remove('active');
+            });
+        }
+
+        let lockedCriterion = null;
+
+        function toggleCriterion(criterion) {
+            if (lockedCriterion === criterion) {
+                lockedCriterion = null;
+                clearHighlights();
+            } else {
+                lockedCriterion = criterion;
+                clearHighlights();
+                highlightCriterion(criterion);
+            }
+        }
+
+        // Initialize
+        renderEssay();
+        setupInteractivity();
+    </script>
+</body>
+</html>
