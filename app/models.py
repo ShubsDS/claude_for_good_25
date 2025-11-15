@@ -9,6 +9,14 @@ class Item(SQLModel, table=True):
     description: Optional[str] = None
 
 
+class User(SQLModel, table=True):
+    id: Optional[int] = Field(default=None, primary_key=True)
+    name: str
+    email: str
+    hashed_password: str
+
+
+
 class Essay(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
     filename: str

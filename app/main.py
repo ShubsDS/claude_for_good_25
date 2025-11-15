@@ -10,6 +10,9 @@ from .database import engine, init_db
 from .models import Item, Essay, Rubric, Grading
 from .essay_grader import EssayGrader
 
+from .jwtsign import SignUpSchema, SignInSchema, signup, signin, decode
+from fastapi import Query
+
 app = FastAPI(title="FastAPI + SQLite (SQLModel) example")
 load_dotenv()
 
@@ -245,3 +248,20 @@ def get_grading(grading_id: int):
         if not grading:
             raise HTTPException(status_code=404, detail="Grading not found")
         return grading
+
+@app.post("/signup")
+def sign_up(request: SignUpSchema):
+    token = signup(request.name, request.email, request.password)
+    return {"token": token}
+
+
+@app.post("/signin")
+def sign_in(request: SignInSchema):
+    token = signin(request.email, request.password)
+    return {"token": token}
+
+
+@app.post("/authtest")
+def authtest(token: str = Query(...)):
+    decoded_token = decode(token)
+    return decoded_token
