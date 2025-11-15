@@ -196,6 +196,9 @@ Respond ONLY with valid JSON, no additional text."""
             if json_match:
                 response_text = json_match.group()
 
+            # Normalize curly quotes to straight quotes for JSON parsing
+            response_text = response_text.replace('"', '"').replace('"', '"').replace(''', "'").replace(''', "'")
+
             grading_data = json.loads(response_text)
         except json.JSONDecodeError as e:
             raise ValueError(f"Failed to parse grading response as JSON: {e}\nResponse: {response_text}")
