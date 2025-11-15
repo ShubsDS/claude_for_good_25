@@ -91,6 +91,11 @@ For each criterion, you must:
 
 IMPORTANT: For the text spans, you must quote the EXACT text from the essay, word-for-word. This is critical for highlighting.
 
+CRITICAL JSON FORMATTING RULES:
+- When quoting text that contains quotation marks, replace them with single quotes or remove them to avoid JSON parsing errors
+- For example: Instead of "He said \"hello\"" use "He said 'hello'" or "He said hello"
+- Make absolutely sure the JSON is valid and parseable - no unescaped quotes in text fields
+
 Please respond in the following JSON format:
 {{
   "criteria_results": [
@@ -195,6 +200,9 @@ Respond ONLY with valid JSON, no additional text."""
             json_match = re.search(r'\{.*\}', response_text, re.DOTALL)
             if json_match:
                 response_text = json_match.group()
+
+            # Normalize curly quotes to straight quotes for JSON parsing
+            response_text = response_text.replace('"', '"').replace('"', '"').replace(''', "'").replace(''', "'")
 
             grading_data = json.loads(response_text)
         except json.JSONDecodeError as e:

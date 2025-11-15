@@ -115,10 +115,17 @@ export default function ResultsPage() {
   const [loadingErrors, setLoadingErrors] = useState<Record<number, string>>({});
 
   useEffect(() => {
-    // Only redirect if we have no gradings and we're not in the middle of loading
+    // Only redirect if we have no gradings - but wait a moment for state to populate
     if (!gradings || gradings.length === 0) {
-      navigate('/teacher/upload');
-      return;
+      console.warn('ResultsPage: No gradings found in state');
+      // Don't redirect immediately - give state time to populate
+      const timeout = setTimeout(() => {
+        if (!gradings || gradings.length === 0) {
+          console.error('ResultsPage: Still no gradings after delay, redirecting');
+          navigate('/teacher/upload');
+        }
+      }, 1000);
+      return () => clearTimeout(timeout);
     }
 
     // Initialize edited results from gradings
