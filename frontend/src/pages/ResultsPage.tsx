@@ -45,7 +45,13 @@ function HighlightedText({ essayText, criteriaResults, activeCriterion }: Highli
     // Add text before highlight
     if (highlight.start > lastPos) {
       elements.push(
-        <span key={`text-${idx}`}>
+        <span
+          key={`text-${idx}`}
+          style={{
+            opacity: activeCriterion === null ? 1 : 0.3,
+            transition: 'opacity 0.2s',
+          }}
+        >
           {essayText.slice(lastPos, highlight.start)}
         </span>
       );
@@ -76,7 +82,13 @@ function HighlightedText({ essayText, criteriaResults, activeCriterion }: Highli
   // Add remaining text
   if (lastPos < essayText.length) {
     elements.push(
-      <span key="text-final">
+      <span
+        key="text-final"
+        style={{
+          opacity: activeCriterion === null ? 1 : 0.3,
+          transition: 'opacity 0.2s',
+        }}
+      >
         {essayText.slice(lastPos)}
       </span>
     );

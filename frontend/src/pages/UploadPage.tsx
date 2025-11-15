@@ -71,7 +71,13 @@ export default function UploadPage() {
     setIsLoading(true);
 
     try {
-      // Step 1: Fetch Canvas submissions and ingest them
+      // Step 1: Delete all existing essays
+      setLoadingMessage('Clearing existing essays...');
+      console.log('Deleting all existing essays from database');
+      const deleteResult = await deleteAllEssays();
+      console.log(`Deleted ${deleteResult.deleted} existing essay(s)`);
+
+      // Step 2: Fetch Canvas submissions and ingest them
       setLoadingMessage('Fetching submissions from Canvas...');
       console.log('Ingesting Canvas submissions - Course:', numericCourseId, 'Assignment:', numericAssignmentId);
 

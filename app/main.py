@@ -3,6 +3,7 @@ import os
 from dotenv import load_dotenv
 
 from fastapi import FastAPI, HTTPException, UploadFile, File, Form
+from fastapi.middleware.cors import CORSMiddleware
 from sqlmodel import Session, select
 from sqlalchemy import func
 
@@ -13,6 +14,22 @@ from .api.canvas import router as canvas_router
 
 app = FastAPI(title="FastAPI + SQLite (SQLModel) example")
 load_dotenv()
+
+# Configure CORS
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=[
+        "http://localhost:5173",  # Vite dev server
+        "http://localhost:5174",  # Vite alternative port
+        "http://localhost:3000",  # Alternative dev port
+        "http://127.0.0.1:5173",
+        "http://127.0.0.1:5174",
+        "http://127.0.0.1:3000",
+    ],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 app.include_router(canvas_router)
 
@@ -150,6 +167,18 @@ def get_essay(essay_id: int):
         if not essay:
             raise HTTPException(status_code=404, detail="Essay not found")
         return essay
+
+
+@app.delete("/essays/")
+def delete_all_essays():
+    """Delete all essays from the database."""
+    with Session(engine) as session:
+        essays = session.exec(select(Essay)).all()
+        count = len(essays)
+        for essay in essays:
+            session.delete(essay)
+        session.commit()
+        return {"ok": True, "deleted": count}
 
 
 @app.post("/rubrics/", response_model=Rubric)

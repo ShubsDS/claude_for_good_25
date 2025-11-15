@@ -10,10 +10,12 @@ from sqlmodel import Session
 # Handle both package and direct imports
 try:
     from ..database import engine
-    from ..models import Submission
+    from ..models import Submission, Essay
+    from ..utils.pdf_extractor import pdf_to_text
 except ImportError:
     from app.database import engine
-    from app.models import Submission
+    from app.models import Submission, Essay
+    from app.utils.pdf_extractor import pdf_to_text
 
 try:
     from canvasapi import Canvas
@@ -178,8 +180,10 @@ def ingest_submissions(req: CanvasIngestRequest):
             except Exception as e:
                 saved_files.append({"error": str(e), "url": url})
 
+        # Extract text from downloaded files and create Essay records
         file_paths_str = ",".join([f for f in saved_files if isinstance(f, str)])
         with Session(engine) as session:
+            # Create Submission record
             record = Submission(
                 assignment_id=req.assignment_id,
                 student_id=int(student_id) if student_id else 0,
@@ -190,6 +194,62 @@ def ingest_submissions(req: CanvasIngestRequest):
             session.add(record)
             session.commit()
             session.refresh(record)
-            results.append({"submission_db_id": record.id, "student_id": student_id, "student_name": student_name, "files": saved_files})
+
+            # Process files and create Essay records
+            essay_ids = []
+            for file_path in saved_files:
+                if not isinstance(file_path, str):
+                    continue
+
+                file_path_obj = Path(file_path)
+                if not file_path_obj.exists():
+                    continue
+
+                # Extract text based on file type
+                text_content = None
+                filename = file_path_obj.name
+
+                if file_path_obj.suffix.lower() == '.pdf':
+                    # Extract text from PDF
+                    try:
+                        text_path = file_path_obj.with_suffix('.txt')
+                        pdf_to_text(str(file_path_obj), str(text_path))
+                        with open(text_path, 'r', encoding='utf-8') as f:
+                            text_content = f.read()
+                    except Exception as e:
+                        # Log error but continue processing
+                        print(f"Failed to extract text from PDF {file_path}: {e}")
+                        continue
+
+                elif file_path_obj.suffix.lower() == '.txt':
+                    # Read text file directly
+                    try:
+                        with open(file_path_obj, 'r', encoding='utf-8') as f:
+                            text_content = f.read()
+                    except Exception as e:
+                        print(f"Failed to read text file {file_path}: {e}")
+                        continue
+                else:
+                    # Skip unsupported file types
+                    continue
+
+                if text_content:
+                    # Create Essay record
+                    essay = Essay(
+                        filename=f"{student_name or student_id}_{filename}",
+                        content=text_content
+                    )
+                    session.add(essay)
+                    session.commit()
+                    session.refresh(essay)
+                    essay_ids.append(essay.id)
+
+            results.append({
+                "submission_db_id": record.id,
+                "student_id": student_id,
+                "student_name": student_name,
+                "files": saved_files,
+                "essay_ids": essay_ids
+            })
 
     return {"ingested": results}
