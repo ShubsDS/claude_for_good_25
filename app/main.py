@@ -9,9 +9,13 @@ from sqlalchemy import func
 from .database import engine, init_db
 from .models import Item, Essay, Rubric, Grading
 from .essay_grader import EssayGrader
+from .api.canvas import router as canvas_router
 
 app = FastAPI(title="FastAPI + SQLite (SQLModel) example")
 load_dotenv()
+
+app.include_router(canvas_router)
+
 
 @app.on_event("startup")
 def on_startup():
