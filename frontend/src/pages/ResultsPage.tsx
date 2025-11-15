@@ -5,7 +5,8 @@ import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
 import { Textarea } from '../components/ui/textarea';
 import { ChevronLeft, ChevronRight, Save, Home, Loader2 } from 'lucide-react';
-import { getEssay } from '../services/api';
+import { getEssay, postGradeFromGrading } from '../services/api';
+import type { ReactNode } from 'react';
 import type { Grading, Essay, CriterionResult } from '../types';
 
 // Color palette - each category gets a color based on its position
@@ -43,7 +44,7 @@ function HighlightedText({ essayText, criteriaResults, activeCriterion }: Highli
   allHighlights.sort((a, b) => a.start - b.start);
 
   let lastPos = 0;
-  const elements: JSX.Element[] = [];
+  const elements: ReactNode[] = [];
 
   allHighlights.forEach((highlight, idx) => {
     // Add text before highlight
@@ -185,16 +186,18 @@ export default function ResultsPage() {
 
   const handleScoreChange = (criterionIndex: number, newScore: string) => {
     if (!currentGrading) return;
-
+    const currentResultsLocal = currentResults;
+    if (!currentResultsLocal) return;
+  
     const score = parseFloat(newScore);
     if (isNaN(score)) return;
-
-    const updatedResults = [...currentResults];
+  
+    const updatedResults = [...currentResultsLocal];
     updatedResults[criterionIndex] = {
       ...updatedResults[criterionIndex],
       score,
     };
-
+  
     setEditedResults({
       ...editedResults,
       [currentGrading.id]: updatedResults,
@@ -204,13 +207,15 @@ export default function ResultsPage() {
 
   const handleFeedbackChange = (criterionIndex: number, newFeedback: string) => {
     if (!currentGrading) return;
-
-    const updatedResults = [...currentResults];
+    const currentResultsLocal = currentResults;
+    if (!currentResultsLocal) return;
+  
+    const updatedResults = [...currentResultsLocal];
     updatedResults[criterionIndex] = {
       ...updatedResults[criterionIndex],
       feedback: newFeedback,
     };
-
+  
     setEditedResults({
       ...editedResults,
       [currentGrading.id]: updatedResults,
@@ -223,6 +228,20 @@ export default function ResultsPage() {
     console.log('Saving changes:', editedResults);
     setHasChanges(false);
     alert('Changes saved successfully!');
+  };
+
+  const handlePost = async () => {
+    if (!currentGrading) return;
+    setIsLoading(true);
+    try {
+      const res = await postGradeFromGrading(currentGrading.id);
+      alert(`Posted grade: ${res.posted_grade}`);
+    } catch (err) {
+      console.error('Failed to post grade to Canvas', err);
+      alert('Failed to post grade to Canvas: ' + (err instanceof Error ? err.message : JSON.stringify(err)));
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   // Check for loading error
@@ -295,6 +314,9 @@ export default function ResultsPage() {
             </div>
 
             <div className="flex items-center gap-2">
+              <Button onClick={handlePost} size="sm" variant="outline" className="mr-2">
+                Post to Canvas
+              </Button>
               {hasChanges && (
                 <Button onClick={handleSave} size="sm">
                   <Save className="mr-2 h-4 w-4" />
