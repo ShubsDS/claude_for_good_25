@@ -8,18 +8,21 @@ import { ChevronLeft, ChevronRight, Save, Home, Loader2 } from 'lucide-react';
 import { getEssay } from '../services/api';
 import type { Grading, Essay, CriterionResult } from '../types';
 
-// Color mapping for criteria (from example_ui.html)
-const CRITERION_COLORS: Record<string, string> = {
-  THESIS: '#FFE0B2',
-  CITATIONS: '#C8E6C9',
-  SUPPORTING_EVIDENCE: '#BBDEFB',
-  STRUCTURE: '#F8BBD0',
-  REFERENCES: '#D1C4E9',
-};
+// Color palette - each category gets a color based on its position
+const COLOR_PALETTE = [
+  '#FFE0B2', // Yellow
+  '#FFCC80', // Orange
+  '#C8E6C9', // Green
+  '#BBDEFB', // Blue
+  '#F8BBD0', // Pink
+  '#D1C4E9', // Purple
+  '#B2DFDB', // Teal
+  '#FFE0B2', // Yellow (cycle)
+];
 
-// Get color for a criterion, or default color
-const getCriterionColor = (criterion: string): string => {
-  return CRITERION_COLORS[criterion] || '#E0E0E0';
+// Get color for a criterion based on its index in the results array
+const getCriterionColor = (criterion: string, criterionIndex: number): string => {
+  return COLOR_PALETTE[criterionIndex % COLOR_PALETTE.length];
 };
 
 interface HighlightedTextProps {
@@ -29,11 +32,12 @@ interface HighlightedTextProps {
 }
 
 function HighlightedText({ essayText, criteriaResults, activeCriterion }: HighlightedTextProps) {
-  // Build all highlights sorted by position
-  const allHighlights = criteriaResults.flatMap((cr) =>
+  // Build all highlights sorted by position, including criterion index
+  const allHighlights = criteriaResults.flatMap((cr, crIndex) =>
     cr.highlights.map((h) => ({
       ...h,
       criterion: cr.criterion,
+      criterionIndex: crIndex,
     }))
   );
   allHighlights.sort((a, b) => a.start - b.start);
@@ -58,7 +62,7 @@ function HighlightedText({ essayText, criteriaResults, activeCriterion }: Highli
     }
 
     // Add highlighted text
-    const color = getCriterionColor(highlight.criterion);
+    const color = getCriterionColor(highlight.criterion, highlight.criterionIndex);
     const isActive = activeCriterion === null || activeCriterion === highlight.criterion;
     const opacity = isActive ? 1 : 0.3;
 
@@ -107,7 +111,8 @@ export default function ResultsPage() {
   const [editedResults, setEditedResults] = useState<Record<number, CriterionResult[]>>({});
   const [activeCriterion, setActiveCriterion] = useState<string | null>(null);
   const [hasChanges, setHasChanges] = useState(false);
-  const [isLoading, setIsLoading] = useState(true);
+  const [isLoading, setIsLoading] = useState(false);
+  const [loadingErrors, setLoadingErrors] = useState<Record<number, string>>({});
 
   useEffect(() => {
     // Only redirect if we have no gradings and we're not in the middle of loading
@@ -116,28 +121,48 @@ export default function ResultsPage() {
       return;
     }
 
-    // Load all essays
-    loadEssays();
+    // Initialize edited results from gradings
+    const resultsMap: Record<number, CriterionResult[]> = {};
+    for (const grading of gradings) {
+      resultsMap[grading.id] = grading.results.criteria_results;
+    }
+    setEditedResults(resultsMap);
+
+    // Load the first essay
+    loadCurrentEssay();
   }, []); // Run only once on mount
 
-  const loadEssays = async () => {
-    setIsLoading(true);
-    const essayMap: Record<number, Essay> = {};
-    const resultsMap: Record<number, CriterionResult[]> = {};
-
-    for (const grading of gradings) {
-      try {
-        const essay = await getEssay(grading.essay_id);
-        essayMap[grading.id] = essay;
-        resultsMap[grading.id] = grading.results.criteria_results;
-      } catch (error) {
-        console.error(`Failed to load essay ${grading.essay_id}:`, error);
-      }
+  // Load essay for current student on-demand
+  useEffect(() => {
+    if (currentGrading && !essays[currentGrading.id] && !loadingErrors[currentGrading.id]) {
+      loadCurrentEssay();
     }
+  }, [currentIndex]); // Run when navigation changes
 
-    setEssays(essayMap);
-    setEditedResults(resultsMap);
-    setIsLoading(false);
+  const loadCurrentEssay = async () => {
+    if (!currentGrading) return;
+
+    // Skip if already loaded
+    if (essays[currentGrading.id]) return;
+
+    setIsLoading(true);
+    try {
+      const essay = await getEssay(currentGrading.essay_id);
+      setEssays(prev => ({ ...prev, [currentGrading.id]: essay }));
+      // Clear any previous error for this student
+      setLoadingErrors(prev => {
+        const { [currentGrading.id]: _, ...rest } = prev;
+        return rest;
+      });
+    } catch (error) {
+      console.error(`Failed to load essay ${currentGrading.essay_id}:`, error);
+      setLoadingErrors(prev => ({
+        ...prev,
+        [currentGrading.id]: error instanceof Error ? error.message : 'Failed to load essay'
+      }));
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   const currentGrading: Grading | undefined = gradings?.[currentIndex];
@@ -200,12 +225,50 @@ export default function ResultsPage() {
     alert('Changes saved successfully!');
   };
 
-  if (isLoading || !currentGrading || !currentEssay || !currentResults) {
+  // Check for loading error
+  const currentError = currentGrading ? loadingErrors[currentGrading.id] : null;
+
+  // Show loading screen only when actively loading
+  if (isLoading && !currentEssay) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <div className="text-center">
           <Loader2 className="h-12 w-12 animate-spin text-blue-600 mx-auto mb-4" />
-          <p className="text-gray-600">Loading results...</p>
+          <p className="text-gray-600">Loading essay...</p>
+        </div>
+      </div>
+    );
+  }
+
+  // Show error screen if essay failed to load
+  if (currentError && !currentEssay) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="text-center max-w-md">
+          <div className="h-12 w-12 rounded-full bg-red-100 flex items-center justify-center mx-auto mb-4">
+            <svg className="h-6 w-6 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </div>
+          <p className="text-gray-900 font-semibold mb-2">Failed to load essay</p>
+          <p className="text-gray-600 text-sm mb-4">{currentError}</p>
+          <Button onClick={loadCurrentEssay} variant="outline">
+            Retry
+          </Button>
+        </div>
+      </div>
+    );
+  }
+
+  // Show error if missing required data
+  if (!currentGrading || !currentEssay || !currentResults) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="text-center">
+          <p className="text-gray-600">No grading data available</p>
+          <Button onClick={() => navigate('/teacher/upload')} className="mt-4">
+            Back to Upload
+          </Button>
         </div>
       </div>
     );
@@ -273,7 +336,7 @@ export default function ResultsPage() {
               >
                 <CardHeader
                   style={{
-                    backgroundColor: getCriterionColor(criterion.criterion),
+                    backgroundColor: getCriterionColor(criterion.criterion, index),
                   }}
                   className="pb-3"
                 >
