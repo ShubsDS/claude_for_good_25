@@ -17,8 +17,8 @@ Most grading systems just return scores and comments. This system goes further b
   "highlights": [
     {
       "text": "This essay demonstrates...",
-      "start": 145,  ← Exact character position
-      "end": 203     ← Highlighting made easy!
+      "start": 145,  // Exact character position
+      "end": 203     // Highlighting made easy!
     }
   ]
 }
@@ -38,8 +38,16 @@ Most grading systems just return scores and comments. This system goes further b
 
 ### 1. Install Dependencies
 
+This project has both Python (backend) and Node.js (frontend) dependencies.
+
 ```bash
+# Install Python dependencies (backend)
 pip install -r requirements.txt
+
+# Install Node.js dependencies (frontend)
+cd frontend
+npm install
+cd ..
 ```
 
 ### 2. Set API Key
@@ -60,11 +68,24 @@ uvicorn app.main:app --reload
 
 Server runs at: http://localhost:8000
 
-### 4. Try the Demo
+### 4. Start Frontend
 
-**Option A**: Open [example_ui.html](example_ui.html) in your browser to see interactive highlighting
+The frontend is a separate application located in the `frontend/` directory.
 
-**Option B**: Run the test script
+```bash
+cd frontend
+npm run dev
+```
+
+The frontend will typically run at: http://localhost:5173 (or similar)
+
+### 5. Try the Demo
+
+**Option A**: Open the running frontend (e.g., http://localhost:5173) in your browser to see the interactive web application.
+
+**Option B**: Open [example_ui.html](example_ui.html) in your browser to see interactive highlighting
+
+**Option C**: Run the test script
 ```bash
 python test_grading.py
 ```
@@ -116,6 +137,9 @@ claude_for_good_25/
 | `/rubrics/` | POST | Upload a rubric |
 | `/grade` | POST | Grade an essay |
 | `/gradings/{id}` | GET | Get grading results with highlights |
+| `/canvas/submissions/ingest` | POST | Ingest submissions from Canvas |
+| `/canvas/post_grade` | POST | Post grade back to Canvas (manual) |
+| `/canvas/post_grade/from_grading` | POST | Post grade back to Canvas using stored context |
 
 ## Example Usage
 
@@ -160,7 +184,7 @@ grading.results.criteria_results.forEach(criterion => {
 
 - **Backend**: FastAPI + SQLModel + SQLite
 - **AI**: Anthropic Claude (Sonnet 4.5)
-- **Frontend**: Vanilla JavaScript (example provided)
+- **Frontend**: React/Vite/TypeScript
 
 ## Use Cases
 
