@@ -8,6 +8,7 @@ from sqlmodel import Session, select
 from sqlalchemy import func
 
 from .database import engine, init_db
+<<<<<<< HEAD
 from .models import Item, Essay, Rubric, Grading, User
 from .essay_grader import EssayGrader
 from .api.canvas import router as canvas_router
@@ -15,6 +16,11 @@ from .jwtsign import SignUpSchema, SignInSchema, signup, signin, decode
 from .jwtvalidate import Bearer
 
 
+=======
+from .models import Item, Essay, Rubric, Grading, Submission
+from .essay_grader import EssayGrader
+from .api.canvas import router as canvas_router, CanvasClientService
+>>>>>>> 772217d3fad175ea94f802978686a87df271bc0b
 
 app = FastAPI(title="FastAPI + SQLite (SQLModel) example")
 load_dotenv()
@@ -289,6 +295,56 @@ def grade_essay(essay_id: int = Form(...), rubric_id: int = Form(...), payload: 
         session.add(grading)
         session.commit()
         session.refresh(grading)
+
+        # Attempt automatic post to Canvas if this essay came from an ingested Submission.
+        # Robust behavior:
+        # - Prefer credentials saved on the Submission.
+        # - Fall back to environment variables CANVAS_BASE_URL / CANVAS_API_TOKEN / CANVAS_COURSE_ID.
+        try:
+            submission = None
+            if getattr(essay, "submission_id", None):
+                submission = session.get(Submission, essay.submission_id)
+
+            if not submission:
+                # Nothing to do
+                pass
+            else:
+                # Determine Canvas connection info (prefer submission values)
+                canvas_base_url = getattr(submission, "canvas_base_url", None) or os.getenv("CANVAS_BASE_URL")
+                canvas_api_token = getattr(submission, "canvas_api_token", None) or os.getenv("CANVAS_API_TOKEN")
+                course_id = getattr(submission, "course_id", None) or (int(os.getenv("CANVAS_COURSE_ID")) if os.getenv("CANVAS_COURSE_ID") else None)
+
+                if not canvas_base_url or not canvas_api_token:
+                    print(f"Skipping Canvas post for submission {submission.id}: no Canvas credentials available")
+                elif not submission.assignment_id or not submission.student_id:
+                    print(f"Skipping Canvas post for submission {submission.id}: missing assignment_id or student_id")
+                else:
+                    try:
+                        service = CanvasClientService(canvas_base_url, canvas_api_token)
+
+                        # Ensure we have a course id (either stored or provided via env)
+                        if not course_id:
+                            raise RuntimeError("Course ID not available on submission and CANVAS_COURSE_ID not set in environment")
+
+                        course = service.get_course(course_id)
+                        assignment = service.get_assignment(course, submission.assignment_id)
+
+                        # Determine points possible and compute final points
+                        points_possible = getattr(assignment, "points_possible", None) or getattr(assignment, "points", None) or 10.0
+                        try:
+                            final_points = float(total_score) / 10.0 * float(points_possible)
+                        except Exception:
+                            final_points = float(total_score)
+
+                        # Post the grade
+                        canvas_submission = assignment.get_submission(submission.student_id)
+                        canvas_submission.edit(submission={'posted_grade': final_points})
+                        print(f"Posted grade to Canvas for submission {submission.id}: {final_points}")
+                    except Exception as e:
+                        print(f"Failed to post grade to Canvas for submission {submission.id if submission else 'unknown'}: {e}")
+        except Exception as e:
+            print(f"Unexpected error checking/submitting Canvas grade: {e}")
+
         return grading
 
 
