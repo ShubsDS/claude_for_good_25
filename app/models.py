@@ -13,12 +13,9 @@ class Essay(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
     filename: str
     content: str
-<<<<<<< HEAD
     created_by: Optional[str] = Field(default=None, index=True)
-=======
     # Link back to the originating Submission when available
     submission_id: Optional[int] = Field(default=None, foreign_key="submission.id")
->>>>>>> 772217d3fad175ea94f802978686a87df271bc0b
     created_at: datetime = Field(default_factory=datetime.utcnow)
 
 
@@ -69,7 +66,10 @@ class Submission(SQLModel, table=True):
     student_name: Optional[str] = None
     teacher: Optional[str] = None
     file_paths: Optional[str] = None
-<<<<<<< HEAD
+    # Store Canvas connection/context used during ingest so grading can post back
+    canvas_base_url: Optional[str] = None
+    canvas_api_token: Optional[str] = None
+
 
 class User(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
@@ -77,9 +77,3 @@ class User(SQLModel, table=True):
     email: str
     hashed_password: str
     user_type: Optional[str]
-
-=======
-    # Store Canvas connection/context used during ingest so grading can post back
-    canvas_base_url: Optional[str] = None
-    canvas_api_token: Optional[str] = None
->>>>>>> 772217d3fad175ea94f802978686a87df271bc0b

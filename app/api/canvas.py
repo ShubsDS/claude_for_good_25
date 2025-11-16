@@ -1,4 +1,4 @@
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Depends
 from pydantic import BaseModel
 from typing import Optional, List, Dict, Any
 from pathlib import Path
@@ -12,10 +12,12 @@ try:
     from ..database import engine
     from ..models import Submission, Essay, Grading
     from ..utils.pdf_extractor import pdf_to_text
+    from ..jwtvalidate import Bearer
 except ImportError:
     from app.database import engine
     from app.models import Submission, Essay, Grading
     from app.utils.pdf_extractor import pdf_to_text
+    from app.jwtvalidate import Bearer
 
 try:
     from canvasapi import Canvas
@@ -25,7 +27,7 @@ except Exception:
 
 class CanvasIngestRequest(BaseModel):
     canvas_base_url: str
-    api_token: str
+    api_token: Optional[str] = None  # Optional, will use env var if not provided
     course_id: int
     assignment_id: int
     student_id: Optional[int] = None
@@ -77,6 +79,9 @@ class CanvasClientService:
 
 router = APIRouter(prefix="/canvas", tags=["canvas"])
 
+# Initialize Bearer authentication
+auth = Bearer()
+
 
 def _safe_get_attr(obj: Any, *attrs, default=None):
     cur = obj
@@ -94,12 +99,19 @@ def _safe_get_attr(obj: Any, *attrs, default=None):
 
 
 @router.post("/submissions/ingest")
-def ingest_submissions(req: CanvasIngestRequest):
+def ingest_submissions(req: CanvasIngestRequest, payload: dict = Depends(auth)):
     """
     Ingest submissions for an assignment from Canvas, download attached files (PDFs),
     and create Submission DB records with saved file paths.
     """
-    service = CanvasClientService(req.canvas_base_url, req.api_token)
+    user_email = payload.get("email")
+    
+    # Get Canvas API token from environment variable or request
+    canvas_api_token = os.getenv("CANVAS_API_TOKEN") or req.api_token
+    if not canvas_api_token:
+        raise HTTPException(status_code=400, detail="Canvas API token not configured in environment and not provided in request")
+    
+    service = CanvasClientService(req.canvas_base_url, canvas_api_token)
     try:
         course = service.get_course(req.course_id)
         assignment = service.get_assignment(course, req.assignment_id)
@@ -196,7 +208,7 @@ def ingest_submissions(req: CanvasIngestRequest):
                 teacher=None,
                 file_paths=file_paths_str,
                 canvas_base_url=req.canvas_base_url,
-                canvas_api_token=req.api_token
+                canvas_api_token=canvas_api_token
             )
             session.add(record)
             session.commit()
@@ -245,7 +257,8 @@ def ingest_submissions(req: CanvasIngestRequest):
                     essay = Essay(
                         filename=f"{student_name or student_id}_{filename}",
                         content=text_content,
-                        submission_id=record.id
+                        submission_id=record.id,
+                        created_by=user_email
                     )
                     session.add(essay)
                     session.commit()

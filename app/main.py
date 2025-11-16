@@ -8,19 +8,12 @@ from sqlmodel import Session, select
 from sqlalchemy import func
 
 from .database import engine, init_db
-<<<<<<< HEAD
-from .models import Item, Essay, Rubric, Grading, User
+from .models import Item, Essay, Rubric, Grading, User, Submission
 from .essay_grader import EssayGrader
-from .api.canvas import router as canvas_router
+from .api.canvas import router as canvas_router, CanvasClientService
 from .jwtsign import SignUpSchema, SignInSchema, signup, signin, decode
 from .jwtvalidate import Bearer
 
-
-=======
-from .models import Item, Essay, Rubric, Grading, Submission
-from .essay_grader import EssayGrader
-from .api.canvas import router as canvas_router, CanvasClientService
->>>>>>> 772217d3fad175ea94f802978686a87df271bc0b
 
 app = FastAPI(title="FastAPI + SQLite (SQLModel) example")
 load_dotenv()
@@ -147,6 +140,41 @@ def delete_item(item_id: int):
 # ============================================================================
 # Essay Grading Endpoints
 # ============================================================================
+
+@app.post("/essays/load-from-folder", response_model=list[Essay])
+def load_essays_from_folder(payload: dict = Depends(auth)):
+    """Load all essays from the example_essays folder."""
+    user_email = payload.get("email")
+    essays_folder = "example_essays"
+    loaded_essays = []
+
+    if not os.path.exists(essays_folder):
+        raise HTTPException(status_code=404, detail="Example essays folder not found")
+
+    with Session(engine) as session:
+        for filename in os.listdir(essays_folder):
+            if filename.endswith('.txt'):
+                filepath = os.path.join(essays_folder, filename)
+                try:
+                    with open(filepath, 'r', encoding='utf-8') as f:
+                        essay_text = f.read()
+
+                    essay = Essay(
+                        filename=filename,
+                        content=essay_text,
+                        created_by=user_email
+                    )
+                    session.add(essay)
+                    loaded_essays.append(essay)
+                except Exception as e:
+                    print(f"Error loading {filename}: {e}")
+
+        session.commit()
+        for essay in loaded_essays:
+            session.refresh(essay)
+
+        return loaded_essays
+
 
 @app.post("/essays/", response_model=Essay)
 async def upload_essay(file: UploadFile = File(...), payload: dict = Depends(auth)):
