@@ -4,8 +4,8 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../co
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
 import { Textarea } from '../components/ui/textarea';
-import { Upload, FileText, Loader2, FolderOpen } from 'lucide-react';
-import { createRubricFromText, uploadRubric, deleteAllEssays, loadEssaysFromFolder } from '../services/api';
+import { Upload, FileText, Loader2, FolderOpen, ExternalLink } from 'lucide-react';
+import { createRubricFromText, uploadRubric, deleteAllEssays, ingestCanvasSubmissions } from '../services/api';
 
 export default function UploadPage() {
   const navigate = useNavigate();
@@ -16,6 +16,11 @@ export default function UploadPage() {
   const [isLoading, setIsLoading] = useState(false);
   const [loadingMessage, setLoadingMessage] = useState('');
   const [error, setError] = useState('');
+
+  // Canvas credentials
+  const [canvasBaseUrl, setCanvasBaseUrl] = useState('https://canvas.its.virginia.edu');
+  const [courseId, setCourseId] = useState('');
+  const [assignmentId, setAssignmentId] = useState('');
 
   const handleRubricFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -40,6 +45,12 @@ export default function UploadPage() {
       return;
     }
 
+    // Validate Canvas credentials
+    if (!courseId || !assignmentId) {
+      setError('Please provide course ID and assignment ID');
+      return;
+    }
+
     setIsLoading(true);
 
     try {
@@ -49,18 +60,24 @@ export default function UploadPage() {
       const deleteResult = await deleteAllEssays();
       console.log(`Deleted ${deleteResult.deleted} existing essay(s)`);
 
-      // Step 2: Load essays from example_essays folder
-      setLoadingMessage('Loading essays from folder...');
-      console.log('Loading essays from example_essays folder');
+      // Step 2: Ingest submissions from Canvas
+      setLoadingMessage('Connecting to Canvas and ingesting submissions...');
+      console.log('Ingesting Canvas submissions');
 
-      const loadedEssays = await loadEssaysFromFolder();
-      console.log('Loaded essays:', loadedEssays);
+      const ingestResult = await ingestCanvasSubmissions({
+        canvas_base_url: canvasBaseUrl,
+        api_token: '', // Will be read from .env on backend
+        course_id: parseInt(courseId),
+        assignment_id: parseInt(assignmentId),
+      });
 
-      if (!loadedEssays || loadedEssays.length === 0) {
-        throw new Error('No essays found in example_essays folder');
+      console.log('Canvas ingestion result:', ingestResult);
+
+      if (!ingestResult.ingested || ingestResult.ingested.length === 0) {
+        throw new Error('No submissions found for this assignment');
       }
 
-      setLoadingMessage(`Loaded ${loadedEssays.length} essay(s). Processing...`);
+      setLoadingMessage(`Ingested ${ingestResult.ingested.length} submission(s). Processing...`);
 
       // Step 3: Upload the rubric
       setLoadingMessage('Uploading rubric...');
@@ -102,21 +119,79 @@ export default function UploadPage() {
         <div className="mb-8">
           <h1 className="text-4xl font-bold text-gray-900 mb-2">Grade Essays</h1>
           <p className="text-gray-600">
-            Upload your grading rubric and grade essays from the example_essays folder
+            Upload your grading rubric and grade essays from Canvas assignments
           </p>
         </div>
 
         <form onSubmit={handleSubmit}>
           <div className="space-y-6">
-            {/* Info Card */}
-            <Card className="bg-blue-50 border-blue-200">
-              <CardContent className="pt-6">
-                <div className="flex items-start gap-3">
-                  <FolderOpen className="h-5 w-5 text-blue-600 mt-0.5" />
-                  <div>
-                    <p className="text-sm text-blue-900 font-medium">Essays will be loaded from example_essays folder</p>
-                    <p className="text-sm text-blue-700 mt-1">All .txt files in the example_essays folder will be automatically loaded and graded.</p>
+            {/* Canvas Credentials Section */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <ExternalLink className="h-5 w-5" />
+                  Canvas Integration
+                </CardTitle>
+                <CardDescription>
+                  Connect to Canvas to load student submissions for grading
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="space-y-2">
+                  <label htmlFor="canvasBaseUrl" className="text-sm font-medium text-gray-700">
+                    Canvas Base URL
+                  </label>
+                  <Input
+                    id="canvasBaseUrl"
+                    type="url"
+                    placeholder="https://canvas.its.virginia.edu"
+                    value={canvasBaseUrl}
+                    onChange={(e) => setCanvasBaseUrl(e.target.value)}
+                    disabled={isLoading}
+                  />
+                </div>
+                
+                
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <label htmlFor="courseId" className="text-sm font-medium text-gray-700">
+                      Course ID
+                    </label>
+                    <Input
+                      id="courseId"
+                      type="number"
+                      placeholder="e.g., 175906"
+                      value={courseId}
+                      onChange={(e) => setCourseId(e.target.value)}
+                      disabled={isLoading}
+                    />
                   </div>
+                  
+                  <div className="space-y-2">
+                    <label htmlFor="assignmentId" className="text-sm font-medium text-gray-700">
+                      Assignment ID
+                    </label>
+                    <Input
+                      id="assignmentId"
+                      type="number"
+                      placeholder="e.g., 790778"
+                      value={assignmentId}
+                      onChange={(e) => setAssignmentId(e.target.value)}
+                      disabled={isLoading}
+                    />
+                  </div>
+                </div>
+                
+                <div className="bg-blue-50 border border-blue-200 p-3 rounded">
+                  <p className="text-sm text-blue-800">
+                    <strong>Canvas API Token:</strong> Automatically loaded from server environment configuration.
+                  </p>
+                </div>
+                
+                <div className="bg-yellow-50 border border-yellow-200 p-3 rounded">
+                  <p className="text-sm text-yellow-800">
+                    <strong>Note:</strong> You can find Course ID and Assignment ID in the Canvas URL when viewing the assignment.
+                  </p>
                 </div>
               </CardContent>
             </Card>
