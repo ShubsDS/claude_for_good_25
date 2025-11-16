@@ -1,20 +1,36 @@
 import { useNavigate } from 'react-router-dom';
+import { useAuth } from '../contexts/AuthContext';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/card';
 import { Button } from '../components/ui/button';
-import { GraduationCap, UserCircle } from 'lucide-react';
+import { GraduationCap, UserCircle, LogOut } from 'lucide-react';
+import Logo from '../components/Logo';
 
 export default function Home() {
   const navigate = useNavigate();
+  const { isAuthenticated, logout } = useAuth();
+
+  const handleLogout = () => {
+    logout();
+    navigate('/login');
+  };
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center p-4">
       <div className="max-w-4xl w-full">
+        {isAuthenticated && (
+          <div className="flex justify-end mb-4">
+            <Button variant="outline" onClick={handleLogout}>
+              <LogOut className="mr-2 h-4 w-4" />
+              Logout
+            </Button>
+          </div>
+        )}
         <div className="text-center mb-12">
-          <h1 className="text-5xl font-bold text-gray-900 mb-4">
-            AI Essay Grading System
-          </h1>
+          <div className="flex justify-center mb-6">
+            <Logo size="xl" />
+          </div>
           <p className="text-xl text-gray-600">
-            Streamline your grading process with AI-powered analysis
+            AI-Powered Essay Grading with Character-Level Highlighting
           </p>
         </div>
 

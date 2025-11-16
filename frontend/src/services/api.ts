@@ -5,6 +5,9 @@ import type {
   Grading,
   CanvasIngestRequest,
   CanvasIngestResponse,
+  AuthResponse,
+  LoginRequest,
+  SignupRequest,
 } from '../types';
 
 const API_BASE_URL = 'http://localhost:8000';
@@ -12,6 +15,31 @@ const API_BASE_URL = 'http://localhost:8000';
 const api = axios.create({
   baseURL: API_BASE_URL,
 });
+
+// Request interceptor to add auth token
+api.interceptors.request.use(
+  (config) => {
+    const token = localStorage.getItem('auth_token');
+    if (token) {
+      config.headers.Authorization = `Bearer ${token}`;
+    }
+    return config;
+  },
+  (error) => Promise.reject(error)
+);
+
+// Response interceptor to handle 401/403 errors
+api.interceptors.response.use(
+  (response) => response,
+  (error) => {
+    if (error.response?.status === 401 || error.response?.status === 403) {
+      // Clear token and redirect to login
+      localStorage.removeItem('auth_token');
+      window.location.href = '/login';
+    }
+    return Promise.reject(error);
+  }
+);
 
 // Essay endpoints
 export const uploadEssay = async (file: File): Promise<Essay> => {
@@ -100,5 +128,16 @@ export const ingestCanvasSubmissions = async (
 // Health check
 export const checkHealth = async (): Promise<{ status: string }> => {
   const response = await api.get('/health');
+  return response.data;
+};
+
+// Auth endpoints
+export const signup = async (data: SignupRequest): Promise<AuthResponse> => {
+  const response = await api.post<AuthResponse>('/signup', data);
+  return response.data;
+};
+
+export const signin = async (data: LoginRequest): Promise<AuthResponse> => {
+  const response = await api.post<AuthResponse>('/signin', data);
   return response.data;
 };

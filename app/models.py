@@ -13,6 +13,7 @@ class Essay(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
     filename: str
     content: str
+    created_by: Optional[str] = Field(default=None, index=True)
     created_at: datetime = Field(default_factory=datetime.utcnow)
 
 
@@ -21,6 +22,7 @@ class Rubric(SQLModel, table=True):
     name: str
     content: str  # Store original rubric text
     criteria: dict = Field(default={}, sa_column=Column(JSON))  # Parsed criteria
+    created_by: Optional[str] = Field(default=None, index=True)
     created_at: datetime = Field(default_factory=datetime.utcnow)
 
 
@@ -30,6 +32,7 @@ class Grading(SQLModel, table=True):
     rubric_id: int = Field(foreign_key="rubric.id")
     results: dict = Field(default={}, sa_column=Column(JSON))  # Scores, feedback, highlights
     total_score: Optional[float] = None
+    created_by: Optional[str] = Field(default=None, index=True)
     created_at: datetime = Field(default_factory=datetime.utcnow)
 
 
@@ -60,3 +63,11 @@ class Submission(SQLModel, table=True):
     student_name: Optional[str] = None
     teacher: Optional[str] = None
     file_paths: Optional[str] = None
+
+class User(SQLModel, table=True):
+    id: Optional[int] = Field(default=None, primary_key=True)
+    name: str
+    email: str
+    hashed_password: str
+    user_type: Optional[str]
+

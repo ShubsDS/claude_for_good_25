@@ -2,15 +2,19 @@ from typing import Optional
 import os
 from dotenv import load_dotenv
 
-from fastapi import FastAPI, HTTPException, UploadFile, File, Form
+from fastapi import FastAPI, HTTPException, UploadFile, File, Form, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from sqlmodel import Session, select
 from sqlalchemy import func
 
 from .database import engine, init_db
-from .models import Item, Essay, Rubric, Grading
+from .models import Item, Essay, Rubric, Grading, User
 from .essay_grader import EssayGrader
 from .api.canvas import router as canvas_router
+from .jwtsign import SignUpSchema, SignInSchema, signup, signin, decode
+from .jwtvalidate import Bearer
+
+
 
 app = FastAPI(title="FastAPI + SQLite (SQLModel) example")
 load_dotenv()
@@ -27,11 +31,15 @@ app.add_middleware(
         "http://127.0.0.1:3000",
     ],
     allow_credentials=True,
-    allow_methods=["*"],
+    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"],
     allow_headers=["*"],
+    expose_headers=["*"],
 )
 
 app.include_router(canvas_router)
+
+# Initialize Bearer authentication
+auth = Bearer()
 
 
 @app.on_event("startup")
@@ -135,15 +143,17 @@ def delete_item(item_id: int):
 # ============================================================================
 
 @app.post("/essays/", response_model=Essay)
-async def upload_essay(file: UploadFile = File(...)):
+async def upload_essay(file: UploadFile = File(...), payload: dict = Depends(auth)):
     """Upload an essay text file."""
     content = await file.read()
     essay_text = content.decode('utf-8')
+    user_email = payload.get("email")
 
     with Session(engine) as session:
         essay = Essay(
             filename=file.filename,
-            content=essay_text
+            content=essay_text,
+            created_by=user_email
         )
         session.add(essay)
         session.commit()
@@ -152,20 +162,26 @@ async def upload_essay(file: UploadFile = File(...)):
 
 
 @app.get("/essays/", response_model=list[Essay])
-def list_essays():
-    """List all uploaded essays."""
+def list_essays(payload: dict = Depends(auth)):
+    """List essays uploaded by the authenticated user."""
+    user_email = payload.get("email")
     with Session(engine) as session:
-        essays = session.exec(select(Essay)).all()
+        essays = session.exec(
+            select(Essay).where(Essay.created_by == user_email)
+        ).all()
         return essays
 
 
 @app.get("/essays/{essay_id}", response_model=Essay)
-def get_essay(essay_id: int):
-    """Get a specific essay by ID."""
+def get_essay(essay_id: int, payload: dict = Depends(auth)):
+    """Get a specific essay by ID (must be uploaded by the authenticated user)."""
+    user_email = payload.get("email")
     with Session(engine) as session:
         essay = session.get(Essay, essay_id)
         if not essay:
             raise HTTPException(status_code=404, detail="Essay not found")
+        if essay.created_by != user_email:
+            raise HTTPException(status_code=403, detail="Access denied")
         return essay
 
 
@@ -182,10 +198,11 @@ def delete_all_essays():
 
 
 @app.post("/rubrics/", response_model=Rubric)
-async def upload_rubric(file: UploadFile = File(...)):
+async def upload_rubric(file: UploadFile = File(...), payload: dict = Depends(auth)):
     """Upload a rubric text file."""
     content = await file.read()
     rubric_text = content.decode('utf-8')
+    user_email = payload.get("email")
 
     # Parse the rubric
     grader = EssayGrader()
@@ -195,7 +212,8 @@ async def upload_rubric(file: UploadFile = File(...)):
         rubric = Rubric(
             name=file.filename,
             content=rubric_text,
-            criteria=criteria
+            criteria=criteria,
+            created_by=user_email
         )
         session.add(rubric)
         session.commit()
@@ -204,39 +222,50 @@ async def upload_rubric(file: UploadFile = File(...)):
 
 
 @app.get("/rubrics/", response_model=list[Rubric])
-def list_rubrics():
-    """List all uploaded rubrics."""
+def list_rubrics(payload: dict = Depends(auth)):
+    """List rubrics uploaded by the authenticated user."""
+    user_email = payload.get("email")
     with Session(engine) as session:
-        rubrics = session.exec(select(Rubric)).all()
+        rubrics = session.exec(
+            select(Rubric).where(Rubric.created_by == user_email)
+        ).all()
         return rubrics
 
 
 @app.get("/rubrics/{rubric_id}", response_model=Rubric)
-def get_rubric(rubric_id: int):
-    """Get a specific rubric by ID."""
+def get_rubric(rubric_id: int, payload: dict = Depends(auth)):
+    """Get a specific rubric by ID (must be uploaded by the authenticated user)."""
+    user_email = payload.get("email")
     with Session(engine) as session:
         rubric = session.get(Rubric, rubric_id)
         if not rubric:
             raise HTTPException(status_code=404, detail="Rubric not found")
+        if rubric.created_by != user_email:
+            raise HTTPException(status_code=403, detail="Access denied")
         return rubric
 
 
 @app.post("/grade", response_model=Grading)
-def grade_essay(essay_id: int = Form(...), rubric_id: int = Form(...)):
+def grade_essay(essay_id: int = Form(...), rubric_id: int = Form(...), payload: dict = Depends(auth)):
     """
     Grade an essay based on a rubric.
 
     Returns grading results with scores, feedback, and text highlights.
     """
+    user_email = payload.get("email")
     with Session(engine) as session:
         # Get essay and rubric
         essay = session.get(Essay, essay_id)
         if not essay:
             raise HTTPException(status_code=404, detail="Essay not found")
+        if essay.created_by != user_email:
+            raise HTTPException(status_code=403, detail="Access denied to essay")
 
         rubric = session.get(Rubric, rubric_id)
         if not rubric:
             raise HTTPException(status_code=404, detail="Rubric not found")
+        if rubric.created_by != user_email:
+            raise HTTPException(status_code=403, detail="Access denied to rubric")
 
         # Grade the essay
         try:
@@ -254,7 +283,8 @@ def grade_essay(essay_id: int = Form(...), rubric_id: int = Form(...)):
             essay_id=essay_id,
             rubric_id=rubric_id,
             results=grading_results,
-            total_score=total_score
+            total_score=total_score,
+            created_by=user_email
         )
         session.add(grading)
         session.commit()
@@ -263,18 +293,32 @@ def grade_essay(essay_id: int = Form(...), rubric_id: int = Form(...)):
 
 
 @app.get("/gradings/", response_model=list[Grading])
-def list_gradings():
-    """List all gradings."""
+def list_gradings(payload: dict = Depends(auth)):
+    """List gradings performed by the authenticated user."""
+    user_email = payload.get("email")
     with Session(engine) as session:
-        gradings = session.exec(select(Grading)).all()
+        gradings = session.exec(
+            select(Grading).where(Grading.created_by == user_email)
+        ).all()
         return gradings
 
 
 @app.get("/gradings/{grading_id}", response_model=Grading)
-def get_grading(grading_id: int):
-    """Get a specific grading by ID with all highlight information."""
+def get_grading(grading_id: int, payload: dict = Depends(auth)):
+    """Get a specific grading by ID with all highlight information (must be graded by the authenticated user)."""
+    user_email = payload.get("email")
     with Session(engine) as session:
         grading = session.get(Grading, grading_id)
         if not grading:
             raise HTTPException(status_code=404, detail="Grading not found")
+        if grading.created_by != user_email:
+            raise HTTPException(status_code=403, detail="Access denied")
         return grading
+
+@app.post("/signup")
+def signup_route(user: SignUpSchema):
+    return signup(user)
+
+@app.post("/signin")
+def sign_in(request: SignInSchema):
+    return signin(request)
