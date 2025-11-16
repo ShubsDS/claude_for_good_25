@@ -41,12 +41,67 @@ function HighlightedText({ essayText, criteriaResults, activeCriterion }: Highli
       criterionIndex: crIndex,
     }))
   );
-  allHighlights.sort((a, b) => a.start - b.start);
+  
+  // Sort by start position first, then by original order (to ensure newer highlights overwrite older ones)
+  allHighlights.sort((a, b) => {
+    if (a.start !== b.start) return a.start - b.start;
+    return 0; // Keep original order for same start position
+  });
+
+  // Merge overlapping highlights - newer highlights overwrite older ones
+  const mergedHighlights: Array<{
+    start: number;
+    end: number;
+    criterion: string;
+    criterionIndex: number;
+    text: string;
+    note?: string;
+  }> = [];
+
+  for (const highlight of allHighlights) {
+    let merged = false;
+    
+    // Check if this highlight overlaps with any existing merged highlights
+    for (let i = mergedHighlights.length - 1; i >= 0; i--) {
+      const existing = mergedHighlights[i];
+      
+      // Check for overlap
+      if (highlight.start < existing.end && highlight.end > existing.start) {
+        // There's an overlap - remove the existing highlight and handle the regions
+        mergedHighlights.splice(i, 1);
+        
+        // Add back any non-overlapping parts of the existing highlight
+        if (existing.start < highlight.start) {
+          // Part of existing highlight before the new one
+          mergedHighlights.push({
+            ...existing,
+            end: highlight.start
+          });
+        }
+        
+        if (existing.end > highlight.end) {
+          // Part of existing highlight after the new one
+          mergedHighlights.push({
+            ...existing,
+            start: highlight.end
+          });
+        }
+        
+        merged = true;
+      }
+    }
+    
+    // Add the new highlight
+    mergedHighlights.push(highlight);
+  }
+
+  // Sort merged highlights by start position
+  mergedHighlights.sort((a, b) => a.start - b.start);
 
   let lastPos = 0;
   const elements: ReactNode[] = [];
 
-  allHighlights.forEach((highlight, idx) => {
+  mergedHighlights.forEach((highlight, idx) => {
     // Add text before highlight
     if (highlight.start > lastPos) {
       elements.push(
@@ -116,18 +171,13 @@ export default function ResultsPage() {
   const [loadingErrors, setLoadingErrors] = useState<Record<number, string>>({});
 
   useEffect(() => {
-    // Only redirect if we have no gradings - but wait a moment for state to populate
+    // Check if we have gradings data
     if (!gradings || gradings.length === 0) {
       console.warn('ResultsPage: No gradings found in state');
-      // Don't redirect immediately - give state time to populate
-      const timeout = setTimeout(() => {
-        if (!gradings || gradings.length === 0) {
-          console.error('ResultsPage: Still no gradings after delay, redirecting');
-          navigate('/teacher/upload');
-        }
-      }, 1000);
-      return () => clearTimeout(timeout);
+      return;
     }
+
+    console.log('ResultsPage: Received gradings:', gradings);
 
     // Initialize edited results from gradings
     const resultsMap: Record<number, CriterionResult[]> = {};
@@ -138,7 +188,7 @@ export default function ResultsPage() {
 
     // Load the first essay
     loadCurrentEssay();
-  }, []); // Run only once on mount
+  }, [gradings]); // Run when gradings changes
 
   // Load essay for current student on-demand
   useEffect(() => {
@@ -254,7 +304,19 @@ export default function ResultsPage() {
   // Check for loading error
   const currentError = currentGrading ? loadingErrors[currentGrading.id] : null;
 
-  // Show loading screen only when actively loading
+  // Show loading state when waiting for gradings to populate
+  if (!gradings || gradings.length === 0) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="text-center">
+          <Loader2 className="h-12 w-12 animate-spin text-blue-600 mx-auto mb-4" />
+          <p className="text-gray-600">Loading grading results...</p>
+        </div>
+      </div>
+    );
+  }
+
+  // Show loading screen when actively loading essay
   if (isLoading && !currentEssay) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
@@ -286,15 +348,13 @@ export default function ResultsPage() {
     );
   }
 
-  // Show error if missing required data
+  // Show error if missing required data (should only happen if data is truly missing, not just loading)
   if (!currentGrading || !currentEssay || !currentResults) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <div className="text-center">
-          <p className="text-gray-600">No grading data available</p>
-          <Button onClick={() => navigate('/teacher/upload')} className="mt-4">
-            Back to Upload
-          </Button>
+          <Loader2 className="h-12 w-12 animate-spin text-blue-600 mx-auto mb-4" />
+          <p className="text-gray-600">Loading essay data...</p>
         </div>
       </div>
     );

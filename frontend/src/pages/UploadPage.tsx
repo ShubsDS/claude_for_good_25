@@ -4,13 +4,11 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../co
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
 import { Textarea } from '../components/ui/textarea';
-import { Upload, FileText, Loader2 } from 'lucide-react';
-import { createRubricFromText, uploadRubric, ingestCanvasSubmissions, deleteAllEssays } from '../services/api';
+import { Upload, FileText, Loader2, FolderOpen } from 'lucide-react';
+import { createRubricFromText, uploadRubric, deleteAllEssays, loadEssaysFromFolder } from '../services/api';
 
 export default function UploadPage() {
   const navigate = useNavigate();
-  const [courseId, setCourseId] = useState('');
-  const [assignmentId, setAssignmentId] = useState('');
   const [rubricFile, setRubricFile] = useState<File | null>(null);
   const [rubricText, setRubricText] = useState('');
   const [rubricName, setRubricName] = useState('');
@@ -30,32 +28,6 @@ export default function UploadPage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
-
-    // Validate course ID
-    if (!courseId) {
-      setError('Please enter a course ID');
-      return;
-    }
-
-    // Validate course ID is numeric
-    const numericCourseId = parseInt(courseId);
-    if (isNaN(numericCourseId)) {
-      setError('Course ID must be a number');
-      return;
-    }
-
-    // Validate assignment ID
-    if (!assignmentId) {
-      setError('Please enter an assignment ID');
-      return;
-    }
-
-    // Validate assignment ID is numeric
-    const numericAssignmentId = parseInt(assignmentId);
-    if (isNaN(numericAssignmentId)) {
-      setError('Assignment ID must be a number');
-      return;
-    }
 
     // Validate rubric
     if (!useTextEditor && !rubricFile) {
@@ -77,26 +49,20 @@ export default function UploadPage() {
       const deleteResult = await deleteAllEssays();
       console.log(`Deleted ${deleteResult.deleted} existing essay(s)`);
 
-      // Step 2: Fetch Canvas submissions and ingest them
-      setLoadingMessage('Fetching submissions from Canvas...');
-      console.log('Ingesting Canvas submissions - Course:', numericCourseId, 'Assignment:', numericAssignmentId);
+      // Step 2: Load essays from example_essays folder
+      setLoadingMessage('Loading essays from folder...');
+      console.log('Loading essays from example_essays folder');
 
-      const canvasResponse = await ingestCanvasSubmissions({
-        canvas_base_url: import.meta.env.VITE_CANVAS_BASE_URL || '',
-        api_token: import.meta.env.VITE_CANVAS_API_TOKEN || '',
-        course_id: numericCourseId,
-        assignment_id: numericAssignmentId,
-      });
+      const loadedEssays = await loadEssaysFromFolder();
+      console.log('Loaded essays:', loadedEssays);
 
-      console.log('Canvas ingestion response:', canvasResponse);
-
-      if (!canvasResponse.ingested || canvasResponse.ingested.length === 0) {
-        throw new Error('No submissions found for this assignment');
+      if (!loadedEssays || loadedEssays.length === 0) {
+        throw new Error('No essays found in example_essays folder');
       }
 
-      setLoadingMessage(`Found ${canvasResponse.ingested.length} submission(s). Processing...`);
+      setLoadingMessage(`Loaded ${loadedEssays.length} essay(s). Processing...`);
 
-      // Step 2: Upload the rubric
+      // Step 3: Upload the rubric
       setLoadingMessage('Uploading rubric...');
       let rubric;
       if (useTextEditor) {
@@ -111,11 +77,10 @@ export default function UploadPage() {
         throw new Error('Rubric upload succeeded but no ID was returned');
       }
 
-      // Step 3: Navigate to grading page
+      // Step 4: Navigate to grading page
       setLoadingMessage('Starting grading process...');
       navigate('/teacher/grading', {
         state: {
-          assignmentId: numericAssignmentId,
           rubricId: rubric.id,
         },
       });
@@ -124,7 +89,7 @@ export default function UploadPage() {
       if (err instanceof Error) {
         setError(`Failed: ${err.message}`);
       } else {
-        setError('Failed to process submissions. Please try again.');
+        setError('Failed to process essays. Please try again.');
       }
       setIsLoading(false);
       setLoadingMessage('');
@@ -135,49 +100,22 @@ export default function UploadPage() {
     <div className="min-h-screen bg-gray-50 py-12 px-4">
       <div className="max-w-3xl mx-auto">
         <div className="mb-8">
-          <h1 className="text-4xl font-bold text-gray-900 mb-2">Upload Assignment</h1>
+          <h1 className="text-4xl font-bold text-gray-900 mb-2">Grade Essays</h1>
           <p className="text-gray-600">
-            Enter the assignment details and upload your grading rubric
+            Upload your grading rubric and grade essays from the example_essays folder
           </p>
         </div>
 
         <form onSubmit={handleSubmit}>
           <div className="space-y-6">
-            {/* Canvas Assignment Information Section */}
-            <Card>
-              <CardHeader>
-                <CardTitle>Canvas Assignment Information</CardTitle>
-                <CardDescription>
-                  Enter the Canvas course ID and assignment ID to grade
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-4">
-                  <div className="space-y-2">
-                    <label htmlFor="courseId" className="text-sm font-medium text-gray-700">
-                      Course ID
-                    </label>
-                    <Input
-                      id="courseId"
-                      type="text"
-                      placeholder="e.g., 175906"
-                      value={courseId}
-                      onChange={(e) => setCourseId(e.target.value)}
-                      disabled={isLoading}
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <label htmlFor="assignmentId" className="text-sm font-medium text-gray-700">
-                      Assignment ID
-                    </label>
-                    <Input
-                      id="assignmentId"
-                      type="text"
-                      placeholder="e.g., 790778"
-                      value={assignmentId}
-                      onChange={(e) => setAssignmentId(e.target.value)}
-                      disabled={isLoading}
-                    />
+            {/* Info Card */}
+            <Card className="bg-blue-50 border-blue-200">
+              <CardContent className="pt-6">
+                <div className="flex items-start gap-3">
+                  <FolderOpen className="h-5 w-5 text-blue-600 mt-0.5" />
+                  <div>
+                    <p className="text-sm text-blue-900 font-medium">Essays will be loaded from example_essays folder</p>
+                    <p className="text-sm text-blue-700 mt-1">All .txt files in the example_essays folder will be automatically loaded and graded.</p>
                   </div>
                 </div>
               </CardContent>

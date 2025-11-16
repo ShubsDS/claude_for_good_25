@@ -8,7 +8,7 @@ import type { Grading } from '../types';
 export default function GradingPage() {
   const location = useLocation();
   const navigate = useNavigate();
-  const { assignmentId, rubricId } = location.state || {};
+  const { rubricId } = location.state || {};
 
   const [progress, setProgress] = useState(0);
   const [total, setTotal] = useState(0);
@@ -17,18 +17,17 @@ export default function GradingPage() {
   const [isComplete, setIsComplete] = useState(false);
 
   useEffect(() => {
-    if (!assignmentId || !rubricId) {
+    if (!rubricId) {
       navigate('/teacher/upload');
       return;
     }
 
     startGrading();
-  }, [assignmentId, rubricId]);
+  }, [rubricId]);
 
   const startGrading = async () => {
     try {
-      // For now, we'll get all essays and grade them
-      // In a real implementation, you'd filter by assignment_id
+      // Get all essays for the authenticated user
       const essays = await getEssays();
       console.log('Fetched essays:', essays);
 

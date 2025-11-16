@@ -66,6 +66,11 @@ export const deleteAllEssays = async (): Promise<{ ok: boolean; deleted: number 
   return response.data;
 };
 
+export const loadEssaysFromFolder = async (): Promise<Essay[]> => {
+  const response = await api.post<Essay[]>('/essays/load-from-folder');
+  return response.data;
+};
+
 // Rubric endpoints
 export const uploadRubric = async (file: File): Promise<Rubric> => {
   const formData = new FormData();
